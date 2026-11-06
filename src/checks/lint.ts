@@ -1,6 +1,6 @@
 /** The markdown lint and the link rule, through markdownlint-cli2. */
 
-import { STRUCTURED_OUTPUT_ENV, FIX_PASS_ENV } from "../config/markdownlint.ts";
+import { STRUCTURED_OUTPUT_ENV, FIX_PASS_ENV, FIX_PASS_KEEPING_TABLES } from "../config/markdownlint.ts";
 import { fail } from "../output.ts";
 import type { FileFinding } from "../rules/links/rule.ts";
 import { runTool } from "../tools.ts";
@@ -43,8 +43,9 @@ function parseFindings(stdout: string): FileFinding[] | null {
 }
 
 /** Markdownlint-cli2 over `files`. It exits 1 on findings and above that on a failure. */
-export function runLint(files: string[], { fix = false } = {}): LintResult {
-  const env = { ...process.env, [STRUCTURED_OUTPUT_ENV]: "1", ...(fix ? { [FIX_PASS_ENV]: "1" } : {}) };
+export function runLint(files: string[], { fix = false, keepTables = false } = {}): LintResult {
+  const fixPass = fix ? { [FIX_PASS_ENV]: keepTables ? FIX_PASS_KEEPING_TABLES : "1" } : {};
+  const env = { ...process.env, [STRUCTURED_OUTPUT_ENV]: "1", ...fixPass };
   const runs = portions(files).map((portion) =>
     // A leading colon makes the path literal: `app/(group)/x.md` and `!x.md` would otherwise be patterns,
     // match nothing, and pass.
