@@ -148,6 +148,8 @@ test("an external link is checked for form and sends nothing", () => {
 test("the base denies plain HTTP, except to this machine", () => {
   assertFinding("[a](http://example.com)", /denied by/);
   assertFinding("[a](http://localhost.example.com)", /denied by/);
+  assertFinding("[a](http://app.localhost.example.com)", /denied by/);
+  assertClean("[a](http://app.localhost:4200) [b](http://a.b.localhost/x)");
   assertClean("[a](http://localhost:3000/x) [b](https://localhost) <http://127.0.0.1> [c](http://0.0.0.0:80) [d](http://[::1]:3000)");
 });
 
@@ -310,6 +312,10 @@ test("a misspelled option is refused, with the names that exist", () => {
     ["{ config: { \"docs-lint-links\": { excludeUrls: [] } } }", /unknown option excludeUrls of docs-lint-links; known: excludedUrls/],
     ["{ config: { \"docs-lint-link\": false } }", /unknown option docs-lint-link; known: docs-lint-links/],
     ["{ config: { \"docs-lint-links\": { excludedUrls: \"x\" } } }", /excludedUrls of docs-lint-links must be an array/],
+    ["{ config: { \"docs-lint-links\": { excludedUrls: [\"(\"] } } }", /excludedUrls of docs-lint-links: Invalid regular expression/],
+    ["{ config: { \"docs-lint-links\": { deniedUrls: [\"(\"] } } }", /deniedUrls of docs-lint-links: Invalid regular expression/],
+    ["{ ignores: \"x\" }", /ignores must be an array/],
+    ["{ globs: \"*.md\" }", /globs must be an array/],
   ];
   for (const [options, pattern] of cases) {
     write(".markdownlint-cli2.mjs", stub(options));

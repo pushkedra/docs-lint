@@ -32,7 +32,7 @@ export interface BaseOptions {
   config?: { "docs-lint-links"?: LinkOptions | false; [rule: string]: unknown };
   /** Globs to exclude from all three checks, on top of the base's `.git`, `node_modules`, `.idea` and `.vscode`. */
   ignores?: string[];
-  /** Which files count as markdown. Default `["**\/*.md"]`. */
+  /** Which files count as markdown. Default `["**\/*.md"]`. An entry starting with `!` excludes, as `ignores` does. */
   globs?: string[];
   /**
    * Whether what is gitignored is left out. Default `true`; `false` reads the whole tree, for a repository
@@ -68,12 +68,28 @@ const OPTIONS = [
   "modulePaths", "noBanner", "noInlineConfig", "noProgress", "outputFormatters", "overrides", "showFound",
 ];
 const LINK_LISTS = ["excludedUrls", "deniedUrls", "excludedSources", "allowedRoots"];
+const URL_LISTS = ["excludedUrls", "deniedUrls"];
 
 const unknownOption = (name: string, known: string[]) => new Error(`unknown option ${name}; known: ${known.join(", ")}`);
+
+/** A pattern that cannot compile would otherwise throw inside the rule, on every file, and read as findings. */
+function assertCompiles(name: string, patterns: (RegExp | string)[]): void {
+  for (const pattern of patterns) {
+    try {
+      RegExp(pattern);
+    } catch (error) {
+      throw new Error(`${name} of ${LINKS_RULE}: ${(error as Error).message}`, { cause: error });
+    }
+  }
+}
 
 /** Refuse a name nothing reads: a typo would otherwise leave a check running as if it were configured. */
 function assertKnown(options: BaseOptions): void {
   for (const name of Object.keys(options)) if (!OPTIONS.includes(name)) throw unknownOption(name, OPTIONS);
+  // A string would be read one character at a time, and drop whatever those characters happen to match.
+  for (const name of ["ignores", "globs"] as const) {
+    if (options[name] !== undefined && !Array.isArray(options[name])) throw new Error(`${name} must be an array`);
+  }
   for (const name of Object.keys(options.config ?? {})) {
     if (name !== LINKS_RULE && name.toLowerCase().startsWith("docs-lint")) throw unknownOption(name, [LINKS_RULE]);
   }
@@ -82,6 +98,7 @@ function assertKnown(options: BaseOptions): void {
   for (const [name, value] of Object.entries(links as object)) {
     if (!LINK_LISTS.includes(name)) throw unknownOption(`${name} of ${LINKS_RULE}`, LINK_LISTS);
     if (!Array.isArray(value)) throw new Error(`${name} of ${LINKS_RULE} must be an array`);
+    if (URL_LISTS.includes(name)) assertCompiles(name, value as (RegExp | string)[]);
   }
 }
 
@@ -159,9 +176,11 @@ const base = {
 
 // Their fixes change what the text says rather than how it is laid out: a list restarted after an
 // image is renumbered, a marker that is a diff's `+` becomes `-`, a colon goes from a heading, the spaces
-// go from a code span, an unused definition is deleted. `--fix` leaves them, and the check still reports.
+// go from a code span, an unused definition is deleted, a command loses its `$`, `#89` becomes a heading,
+// a fragment changes case. `--fix` leaves them, and the check still reports.
 const LEFT_TO_THE_AUTHOR = Object.fromEntries(
-  ["MD004", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD053"].map((rule) => [rule, false] as const),
+  ["MD004", "MD014", "MD018", "MD020", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD051", "MD053"]
+    .map((rule) => [rule, false] as const),
 );
 
 interface FormatterOptions {

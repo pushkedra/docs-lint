@@ -22,6 +22,8 @@ export interface RunOptions {
 const MARKDOWNLINT_CONFIG = ".markdownlint-cli2.mjs";
 const SPELLING_CONFIG = "cspell.json";
 const MAX_FIX_PASSES = 5;
+// How markdownlint reports a rule that crashed: as an ordinary finding, which would read as exit 1.
+const RULE_EXCEPTION = "This rule threw an exception";
 
 function namedFiles(
   files: string[],
@@ -34,7 +36,12 @@ function namedFiles(
     if (!stat?.isFile()) fail(`not a file: ${file}`);
     if (!isMarkdown(file)) fail(`not markdown: ${file}`);
   }
-  return files.filter((file) => isRegularFile(file) && !ignored(file));
+  // A skip is not a failure, since a hook may pass any file, but with no findings silence would read as clean.
+  return files.filter((file) => {
+    const reason = !isRegularFile(file) ? "a symlink is not read" : ignored(file) ? "the config excludes it" : null;
+    if (reason) console.error(`docs-lint: skipped ${file}: ${reason}`);
+    return !reason;
+  });
 }
 
 /**
@@ -61,10 +68,17 @@ export async function run(options: RunOptions): Promise<void> {
     if (!existsSync(config)) fail(`no ${config} here. Run from the repository root; the README shows the file.`);
   }
 
-  const imported = await import(pathToFileURL(resolve(MARKDOWNLINT_CONFIG)).href) as { default: BaseOptions };
+  const imported = await import(pathToFileURL(resolve(MARKDOWNLINT_CONFIG)).href) as { default?: BaseOptions };
   const loaded = imported.default;
-  const ignored = ignoredBy(process.cwd(), loaded.ignores ?? []);
-  const globs = (loaded.globs ?? ["**/*.md"]).map(globToRegExp);
+  // Without the base there are no rules and no link check, and the run would report a clean tree.
+  if (!loaded?.customRules?.some((rule) => (rule as { names?: string[] }).names?.includes(LINKS_RULE))) {
+    fail(`${MARKDOWNLINT_CONFIG} has to export withBase(...) as its default, or the checks are off. The README shows the file.`);
+  }
+  const allGlobs = loaded.globs ?? ["**/*.md"];
+  // Files reach the tools by name, past their globbing, so a negated glob has to act as an exclusion here.
+  const negated = allGlobs.filter((glob) => glob.startsWith("!")).map((glob) => glob.slice(1));
+  const globs = allGlobs.filter((glob) => !glob.startsWith("!")).map(globToRegExp);
+  const ignored = ignoredBy(process.cwd(), [...loaded.ignores ?? [], ...negated]);
   const isMarkdown = (file: string): boolean => globs.some((glob) => glob.test(file.replace(/^\.\//, "")));
 
   const tree = listFiles(process.cwd(), { gitignore: loaded.gitignore !== false, ignored });
@@ -72,7 +86,7 @@ export async function run(options: RunOptions): Promise<void> {
   const rivals = rivalConfigs(process.cwd(), tree);
   if (rivals.length) {
     fail(`these configs would replace ${MARKDOWNLINT_CONFIG} or ${SPELLING_CONFIG} and turn checks off without a word. `
-      + `Remove them, or exclude them in ignores:\n  ${rivals.join("\n  ")}`);
+      + `Remove them; a nested one may be excluded in ignores instead:\n  ${rivals.join("\n  ")}`);
   }
 
   let files: string[];
@@ -104,6 +118,8 @@ export async function run(options: RunOptions): Promise<void> {
   if (options.fix) fix(files, ignored);
 
   const lint = runLint(files);
+  const crashed = lint.findings.find(({ errorDetail }) => errorDetail?.startsWith(RULE_EXCEPTION));
+  if (crashed) fail(formatFinding(crashed));
   for (const finding of lint.findings) console.log(formatFinding(finding));
   if (lint.unparsed) process.stdout.write(lint.unparsed);
   const errors = lint.findings.filter(({ severity }) => severity === "error");

@@ -11,7 +11,7 @@ const MAX_ARGUMENT_BYTES = 200_000;
 export interface LintResult {
   found: boolean;
   findings: FileFinding[];
-  /** What a config not built on `withBase` printed, since its formatter is not this package's. */
+  /** Anything markdownlint-cli2 printed that is not findings. */
   unparsed: string;
 }
 

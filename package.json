@@ -51,7 +51,7 @@
     "pretest": "npm run build",
     "test": "npm run typecheck && node --test --test-reporter=dot \"test/*.test.ts\"",
     "check:package": "npm run build && publint --strict && attw --pack . --profile esm-only",
-    "prepare": "git config core.hooksPath .githooks || true",
+    "setup:hooks": "git config core.hooksPath .githooks",
     "prepack": "npm run build",
     "prepublishOnly": "npm test"
   },
