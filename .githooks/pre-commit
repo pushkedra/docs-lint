@@ -3,5 +3,4 @@
 set -e
 npm run --silent typecheck
 npm run --silent lint:code
-npm run --silent build
 node dist/cli.js --staged

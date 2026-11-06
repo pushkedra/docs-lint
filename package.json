@@ -45,6 +45,7 @@
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --project tsconfig.json",
     "lint": "node dist/cli.js",
+    "prelint:code": "npm run build",
     "lint:code": "eslint .",
     "pretest": "npm run build",
     "test": "npm run typecheck && node --test --test-reporter=dot \"test/*.test.ts\"",
