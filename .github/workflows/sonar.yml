@@ -1,0 +1,40 @@
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonar:
+    name: sonar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The scanner reads git blame to tell new code from old.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Source maps make the CLI runs the tests spawn from dist/ count toward src/. The published build carries none.
+      - run: npx tsc --project tsconfig.build.json --sourceMap
+      - run: node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=lcov.info "test/*.test.ts"
+        env:
+          NODE_OPTIONS: --enable-source-maps
+      - id: package
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          # New code is counted from the previous version, so without this it would never reset.
+          args: -Dsonar.projectVersion=${{ steps.package.outputs.version }}

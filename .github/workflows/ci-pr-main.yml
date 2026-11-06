@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run lint
 
@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: "26"
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run lint:code
 
   package:
@@ -52,5 +52,5 @@ jobs:
         with:
           node-version: "26"
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run check:package

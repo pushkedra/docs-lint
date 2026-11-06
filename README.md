@@ -1,5 +1,7 @@
 # docs-lint
 
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=pushkedra_docs-lint&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pushkedra_docs-lint) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pushkedra_docs-lint&metric=coverage)](https://sonarcloud.io/component_measures?id=pushkedra_docs-lint&metric=coverage) [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.18-green.svg)](https://nodejs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 One command to check the markdown that people and AI agents both read: `CLAUDE.md`, skills, specifications, wikis. It runs [markdownlint](https://github.com/DavidAnson/markdownlint-cli2), an American-English spell check with [cspell](https://github.com/streetsidesoftware/cspell), a check for hard-wrapped paragraphs, which no lint rule can see, and a check that every link leads somewhere. The rules ship as a versioned package, so every repository holds the same ones and a change reaches each through one version bump.
 
 ## Install
