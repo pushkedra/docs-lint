@@ -271,6 +271,61 @@ test("--fix keeps a command's prompt, a line that only looks like a heading and 
   for (const rule of [/MD014/, /MD018/, /MD020/, /MD051/]) assert.match(output, rule);
 });
 
+test("--fix keeps the code of a table row, and the tables around it until its pipe is escaped", () => {
+  const broken = "| Code | Why |\n| --- | --- |\n| `a ||= b` | one |\n";
+  const loose = "\n|A|B|\n|---|---|\n|c|d|\n";
+  const text = `# Title\n\n${broken}${loose}`;
+  write("a.md", text);
+  const first = docsLint("--fix");
+  assert.equal(first.status, 1, first.output);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), text);
+  assert.match(first.output, /left the tables in a\.md/);
+  assert.match(first.output, /MD056/);
+
+  write("a.md", text.replace("a ||= b", String.raw`a \|\|= b`));
+  const second = docsLint("--fix");
+  assert.equal(second.status, 0, second.output);
+  assert.doesNotMatch(second.output, /left the tables/);
+  const fixed = readFileSync(join(root, "a.md"), "utf8");
+  assert.ok(fixed.includes("| `a \\|\\|= b` | one |"), fixed);
+  assert.ok(fixed.includes("| A | B |"), fixed);
+});
+
+test("--fix reaches a fixed point in one run when a blank line shows a line was never a table's row", () => {
+  write("a.md", "# Title\n\n|A|B|\n|---|---|\n|c|d|\n- `e|f`\n");
+  const first = docsLint("--fix");
+  assert.doesNotMatch(first.output, /left the tables/);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), "# Title\n\n| A | B |\n| --- | --- |\n| c | d |\n\n- `e|f`\n");
+  assert.match(docsLint("--fix").output, /changed 0 file/);
+});
+
+test("--fix holds a table back for any row that has a bare pipe in code, and for nothing else", () => {
+  const held = {
+    "a header": "| `a|b` | c | d |\n| --- | --- | --- |\n| e | f | g |\n",
+    "no outer pipes": "A | B\n--- | ---\n`c|d` | e\n",
+    "one column": "| A |\n| --- |\n| `b|c` |\n",
+    "a quote": "> | A | B |\n> | --- | --- |\n> | `c|d` | e |\n",
+    "a double backtick": "| A | B |\n| --- | --- |\n| ``c|d`` | e |\n",
+  };
+  for (const [name, table] of Object.entries(held)) {
+    write("a.md", `# Title\n\n${table}`);
+    assert.match(docsLint("--fix").output, /left the tables/, name);
+  }
+
+  const free = {
+    "prose": "See `a||b` here.\n\n|A|B|\n|---|---|\n|c|d|\n",
+    "two spans in a row": "|A|B|\n|---|---|\n|`c`|`d`|\n",
+    "a lone backtick": "|A|B|\n|---|---|\n|`|d|\n",
+    "after the table": "|A|B|\n|---|---|\n|c|d|\n\n`e|f`\n",
+  };
+  for (const [name, table] of Object.entries(free)) {
+    write("a.md", `# Title\n\n${table}`);
+    const { output } = docsLint("--fix");
+    assert.doesNotMatch(output, /left the tables/, name);
+    assert.match(readFileSync(join(root, "a.md"), "utf8"), /\| A \| B \|/, name);
+  }
+});
+
 test("--fix keeps a tab in code and reaches a fixed point in one run", () => {
   write("a.md", "# Title\n\n\n\nOne\ntwo\n\n```make\n\tgo build\n```\n");
   assert.equal(docsLint("--fix").status, 0);

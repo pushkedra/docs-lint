@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { formatFinding, runLint } from "./checks/lint.ts";
 import { runSpelling } from "./checks/spelling.ts";
+import { hasPipeInTableCode } from "./checks/tables.ts";
 import { firstWrappedLine, reflowFiles } from "./checks/wrap.ts";
 import type { BaseOptions } from "./config/markdownlint.ts";
 import { isRegularFile, isUtf8, listFiles, rivalConfigs } from "./files.ts";
@@ -52,13 +53,24 @@ function fix(files: string[], ignored: (file: string) => boolean): void {
   const read = (): string[] => files.map((file) => readFileSync(file, "utf8"));
   const original = read();
   let before = original;
+  let keepingTables = new Set<string>();
   for (let pass = 0; pass < MAX_FIX_PASSES; pass += 1) {
+    // MD060 reads a bare pipe in a row's code as a cell's edge and spaces it, so `a ||= b` becomes `a | | = b`.
+    // A fix can only be turned off for a whole file, so the file's other tables wait until the pipe is escaped.
+    // Asked on every pass: MD058's blank line can show that a line under a table was never one of its rows.
+    const held = new Set(files.filter((_, index) => hasPipeInTableCode(before[index])));
+    keepingTables = held;
+    const rest = files.filter((file) => !held.has(file));
     reflowFiles(files, { check: false, ignored });
-    runLint(files, { fix: true });
+    if (rest.length) runLint(rest, { fix: true });
+    if (held.size) runLint([...held], { fix: true, keepTables: true });
     const after = read();
     const moved = after.some((text, index) => text !== before[index]);
     before = after;
     if (!moved) break;
+  }
+  for (const file of keepingTables) {
+    console.log(String.raw`docs-lint: --fix left the tables in ${file} as they are: a row has a bare | in code, write it \|`);
   }
   console.log(`docs-lint: --fix changed ${before.filter((text, index) => text !== original[index]).length} file(s)`);
 }

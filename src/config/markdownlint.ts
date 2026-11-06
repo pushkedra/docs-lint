@@ -7,6 +7,7 @@ import { LINKS_RULE, linksRule } from "../rules/links/rule.ts";
 /** Set by the command for markdownlint-cli2, which loads this file in its own process. */
 export const STRUCTURED_OUTPUT_ENV = "DOCS_LINT_STRUCTURED_OUTPUT";
 export const FIX_PASS_ENV = "DOCS_LINT_FIX_PASS";
+export const FIX_PASS_KEEPING_TABLES = "keeping-tables";
 
 /** Options of the `docs-lint-links` rule, set under `config` in `withBase`. */
 export interface LinkOptions {
@@ -200,11 +201,17 @@ const STRUCTURED_OUTPUT = { noBanner: true, noProgress: true, outputFormatters: 
 export function withBase(options: BaseOptions = {}): BaseOptions {
   assertKnown(options);
   const { config, ignores = [], customRules = [], ...rest } = options;
+  const fixPass = process.env[FIX_PASS_ENV];
   return {
     ...base,
     ...rest,
     customRules: [...base.customRules, ...customRules],
-    config: { ...base.config, ...config, ...(process.env[FIX_PASS_ENV] ? LEFT_TO_THE_AUTHOR : {}) },
+    config: {
+      ...base.config,
+      ...config,
+      ...(fixPass ? LEFT_TO_THE_AUTHOR : {}),
+      ...(fixPass === FIX_PASS_KEEPING_TABLES ? { MD060: false } : {}),
+    },
     ignores: [...base.ignores, ...ignores],
     ...(process.env[STRUCTURED_OUTPUT_ENV] ? STRUCTURED_OUTPUT : {}),
   };
