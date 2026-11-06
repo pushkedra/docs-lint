@@ -1,0 +1,40 @@
+name: CI (PR into dev)
+
+on:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pr-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Linux on the floor in `engines`, exactly: the opposite corner from developing on a Mac on the latest
+  # Node. Every other combination runs when a release goes into main.
+  test:
+    name: test (ubuntu-latest, Node 22.18.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.18.0"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - run: npm run check:package

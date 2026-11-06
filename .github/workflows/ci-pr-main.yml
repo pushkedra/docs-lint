@@ -1,14 +1,14 @@
-name: CI
+name: CI (PR into main)
 
 on:
   pull_request:
-    branches: [dev, main]
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-pr-main-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,10 +18,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A release into main runs every combination. A pull request into dev runs Linux on the floor in
-        # `engines`, exactly: the opposite corner from developing on a Mac on the latest Node.
-        os: ${{ github.base_ref == 'main' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
-        node: ${{ github.base_ref == 'main' && fromJSON('["22.18.0", "24", "26"]') || fromJSON('["22.18.0"]') }}
+        os: [ubuntu-latest, macos-latest]
+        # The floor in `engines`, exactly, and the even releases above it.
+        node: ["22.18.0", "24", "26"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
