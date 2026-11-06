@@ -1,0 +1,4 @@
+# Terms no dictionary knows that are spelled right in any repository. This file is published: a
+# client's name, a product's term or anything that belongs to one repository goes into that
+# repository's project-words.txt, never here.
+frontmatter

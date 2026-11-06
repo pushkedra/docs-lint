@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "noEmit": true,
+    "module": "nodenext",
+    "target": "es2023",
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["bin", "config/*.mjs", "lib"]
+}

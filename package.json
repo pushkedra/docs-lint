@@ -1,0 +1,62 @@
+{
+  "name": "docs-lint",
+  "version": "0.1.0",
+  "description": "One lint for the markdown people and agents both read: shared markdownlint rules, American-English spelling, hard-wrap and link checks.",
+  "keywords": [
+    "markdown",
+    "lint",
+    "markdownlint",
+    "cspell",
+    "spelling",
+    "documentation",
+    "llm",
+    "agents"
+  ],
+  "license": "MIT",
+  "author": "Ivan Pushkedra",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pushkedra/docs-lint.git"
+  },
+  "type": "module",
+  "bin": {
+    "docs-lint": "bin/docs-lint.mjs"
+  },
+  "exports": {
+    "./markdownlint": {
+      "types": "./types/config/markdownlint.d.mts",
+      "default": "./config/markdownlint.mjs"
+    },
+    "./cspell": "./config/cspell.json"
+  },
+  "files": [
+    "bin",
+    "config",
+    "dict",
+    "lib",
+    "types",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "lint": "node bin/docs-lint.mjs",
+    "test": "tsc --project tsconfig.json && node --test",
+    "build:types": "tsc --project tsconfig.types.json",
+    "prepack": "npm run build:types",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "cspell": "10.3.6",
+    "markdownlint": "0.42.0",
+    "markdownlint-cli2": "0.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
