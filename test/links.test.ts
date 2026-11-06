@@ -9,32 +9,32 @@ import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE = resolve(fileURLToPath(import.meta.url), "../..");
-const BIN = join(PACKAGE, "bin/docs-lint.mjs");
+const BIN = join(PACKAGE, "dist/cli.js");
 
-let top;
-let root;
+let top: string;
+let root: string;
 
-const write = (name, text) => {
+const write = (name: string, text: string) => {
   mkdirSync(dirname(join(root, name)), { recursive: true });
   writeFileSync(join(root, name), text, "utf8");
 };
-const docsLint = (...args) => {
+const docsLint = (...args: string[]) => {
   const done = spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
   return { status: done.status, output: done.stdout + done.stderr };
 };
-const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
-const page = (body) => `# Title\n\n${body}\n`;
-const stub = (options) =>
+const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+const page = (body: string) => `# Title\n\n${body}\n`;
+const stub = (options: string) =>
   `import { withBase } from "docs-lint/markdownlint";\nexport default withBase(${options});\n`;
 
-const assertFinding = (body, pattern) => {
+const assertFinding = (body: string, pattern: RegExp) => {
   write("a.md", page(body));
   const { status, output } = docsLint("a.md");
   assert.equal(status, 1, output);
   assert.match(output, /docs-lint-links/);
   assert.match(output, pattern);
 };
-const assertClean = (body) => {
+const assertClean = (body: string) => {
   write("a.md", page(body));
   const { status, output } = docsLint("a.md");
   assert.equal(status, 0, output);
@@ -303,12 +303,13 @@ test("a repository's RegExp with the g flag gives the same answer every time", (
 
 test("a misspelled option is refused, with the names that exist", () => {
   write("a.md", page("Body."));
-  for (const [options, pattern] of [
+  const cases: [string, RegExp][] = [
     ['{ ignore: ["x"] }', /unknown option ignore; known: config, ignores/],
     ['{ config: { "docs-lint-links": { excludeUrls: [] } } }', /unknown option excludeUrls of docs-lint-links; known: excludedUrls/],
     ['{ config: { "docs-lint-link": false } }', /unknown option docs-lint-link; known: docs-lint-links/],
     ['{ config: { "docs-lint-links": { excludedUrls: "x" } } }', /excludedUrls of docs-lint-links must be an array/],
-  ]) {
+  ];
+  for (const [options, pattern] of cases) {
     write(".markdownlint-cli2.mjs", stub(options));
     const { status, output } = docsLint("a.md");
     assert.equal(status, 2, output);

@@ -1,13 +1,15 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": true,
-    "strict": false,
-    "noEmit": true,
+    "strict": true,
     "module": "nodenext",
     "target": "es2023",
+    "noEmit": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["bin", "config/*.mjs", "lib"]
+  "include": ["src", "test"]
 }

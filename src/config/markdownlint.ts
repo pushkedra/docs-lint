@@ -1,42 +1,57 @@
-// @ts-check
-
 // The markdown lint's rules and exclusions. A repository takes them through `withBase`, in its own
-// `.markdownlint-cli2.mjs`. JavaScript rather than JSONC, because `extends` carries a config's
+// `.markdownlint-cli2.mjs`. JavaScript rather than JSONC there, because `extends` carries a config's
 // rules but not its `ignores`, and a repository has to add exclusions without losing these.
 
-import { LINKS_RULE, linksRule } from "../lib/links.mjs";
+import { LINKS_RULE, linksRule } from "../links.ts";
 
-/**
- * Options of the `docs-lint-links` rule, set under `config` in `withBase`.
- *
- * @typedef {object} LinkOptions
- * @property {(RegExp | string)[]} [excludedUrls] Link destinations not to check, and allowed past a denial, such as `/^http:\/\/legacy\.example\.com/`.
- * @property {(RegExp | string)[]} [deniedUrls] External URLs to refuse, on top of the base's plain `http://`, such as `/^https:\/\/jira\.example\.com/`.
- * @property {string[]} [excludedSources] Globs of files whose links are not checked, while the rest of the lint still applies to them.
- * @property {string[]} [allowedRoots] Paths outside the repository, relative to its root, that tracked files may link into, such as `../sibling`. Those links must still resolve.
- */
+/** Options of the `docs-lint-links` rule, set under `config` in `withBase`. */
+export interface LinkOptions {
+  /** Link destinations not to check, and allowed past a denial, such as `/^http:\/\/legacy\.example\.com/`. */
+  excludedUrls?: (RegExp | string)[];
+  /** External URLs to refuse, on top of the base's plain `http://`, such as `/^https:\/\/jira\.example\.com/`. */
+  deniedUrls?: (RegExp | string)[];
+  /** Globs of files whose links are not checked, while the rest of the lint still applies to them. */
+  excludedSources?: string[];
+  /** Paths outside the repository, relative to its root, that tracked files may link into, such as `../sibling`. Those links must still resolve. */
+  allowedRoots?: string[];
+}
 
 /**
  * What a repository passes to `withBase`. Anything else is refused, because a misspelled option would
  * otherwise be ignored without a word.
- *
- * @typedef {object} BaseOptions
- * @property {{ [LINKS_RULE]?: LinkOptions | false, [rule: string]: unknown }} [config] Lint rules on top of the base's, by name, and the options of `docs-lint-links`. `false` turns a rule off.
- * @property {string[]} [ignores] Globs to exclude from all three checks, on top of the base's `.git`, `node_modules`, `.idea` and `.vscode`.
- * @property {string[]} [globs] Which files count as markdown. Default `["**\/*.md"]`.
- * @property {boolean | string} [gitignore] Whether what is gitignored is left out. Default `true`; `false` reads the whole tree, for a repository that lints a gitignored folder too.
- * @property {unknown[]} [customRules] More markdownlint rules, beside the base's.
- * @property {boolean} [fix] A markdownlint-cli2 option. `docs-lint --fix` is the way to fix.
- * @property {string} [frontMatter] A markdownlint-cli2 option: the pattern that recognizes frontmatter.
- * @property {unknown[]} [markdownItPlugins] A markdownlint-cli2 option.
- * @property {string[]} [modulePaths] A markdownlint-cli2 option.
- * @property {boolean} [noBanner] A markdownlint-cli2 option. Default `true` here.
- * @property {boolean} [noInlineConfig] A markdownlint-cli2 option: ignore `markdownlint-disable` comments.
- * @property {boolean} [noProgress] A markdownlint-cli2 option. Default `true` here.
- * @property {unknown[]} [outputFormatters] A markdownlint-cli2 option. The command's totals read its default format.
- * @property {unknown[]} [overrides] A markdownlint-cli2 option.
- * @property {boolean} [showFound] A markdownlint-cli2 option.
  */
+export interface BaseOptions {
+  /** Lint rules on top of the base's, by name, and the options of `docs-lint-links`. `false` turns a rule off. */
+  config?: { "docs-lint-links"?: LinkOptions | false; [rule: string]: unknown };
+  /** Globs to exclude from all three checks, on top of the base's `.git`, `node_modules`, `.idea` and `.vscode`. */
+  ignores?: string[];
+  /** Which files count as markdown. Default `["**\/*.md"]`. */
+  globs?: string[];
+  /** Whether what is gitignored is left out. Default `true`; `false` reads the whole tree, for a repository that lints a gitignored folder too. */
+  gitignore?: boolean | string;
+  /** More markdownlint rules, beside the base's. */
+  customRules?: unknown[];
+  /** A markdownlint-cli2 option. `docs-lint --fix` is the way to fix. */
+  fix?: boolean;
+  /** A markdownlint-cli2 option: the pattern that recognizes frontmatter. */
+  frontMatter?: string;
+  /** A markdownlint-cli2 option. */
+  markdownItPlugins?: unknown[];
+  /** A markdownlint-cli2 option. */
+  modulePaths?: string[];
+  /** A markdownlint-cli2 option. Default `true` here. */
+  noBanner?: boolean;
+  /** A markdownlint-cli2 option: ignore `markdownlint-disable` comments. */
+  noInlineConfig?: boolean;
+  /** A markdownlint-cli2 option. Default `true` here. */
+  noProgress?: boolean;
+  /** A markdownlint-cli2 option. The command's totals read its default format. */
+  outputFormatters?: unknown[];
+  /** A markdownlint-cli2 option. */
+  overrides?: unknown[];
+  /** A markdownlint-cli2 option. */
+  showFound?: boolean;
+}
 
 const OPTIONS = [
   "config", "ignores", "globs", "gitignore", "customRules", "fix", "frontMatter", "markdownItPlugins",
@@ -44,19 +59,19 @@ const OPTIONS = [
 ];
 const LINK_LISTS = ["excludedUrls", "deniedUrls", "excludedSources", "allowedRoots"];
 
-const unknownOption = (name, known) => new Error(`unknown option ${name}; known: ${known.join(", ")}`);
+const unknownOption = (name: string, known: string[]) => new Error(`unknown option ${name}; known: ${known.join(", ")}`);
 
 /** Refuse a name nothing reads: a typo would otherwise leave a check running as if it were configured. */
-function assertKnown(options) {
+function assertKnown(options: BaseOptions): void {
   for (const name of Object.keys(options)) if (!OPTIONS.includes(name)) throw unknownOption(name, OPTIONS);
   for (const name of Object.keys(options.config ?? {})) {
     if (name !== LINKS_RULE && name.toLowerCase().startsWith("docs-lint")) throw unknownOption(name, [LINKS_RULE]);
   }
-  const links = options.config?.[LINKS_RULE];
+  const links: unknown = options.config?.[LINKS_RULE];
   if (links === undefined || links === false || links === true) return;
-  for (const name of Object.keys(links)) {
+  for (const [name, value] of Object.entries(links as object)) {
     if (!LINK_LISTS.includes(name)) throw unknownOption(`${name} of ${LINKS_RULE}`, LINK_LISTS);
-    if (!Array.isArray(links[name])) throw new Error(`${name} of ${LINKS_RULE} must be an array`);
+    if (!Array.isArray(value)) throw new Error(`${name} of ${LINKS_RULE} must be an array`);
   }
 }
 
@@ -136,16 +151,11 @@ const base = {
 // image is renumbered, a marker that is a diff's `+` becomes `-`, a colon goes from a heading, the spaces
 // go from a code span, an unused definition is deleted. `--fix` leaves them, and the check still reports.
 const LEFT_TO_THE_AUTHOR = Object.fromEntries(
-  ["MD004", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD053"].map((rule) => [rule, false]),
+  ["MD004", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD053"].map((rule) => [rule, false] as const),
 );
 
-/**
- * The base with a repository's own settings on top: its rules win, its exclusions add.
- *
- * @param {BaseOptions} [options]
- * @returns {BaseOptions}
- */
-export function withBase(options = {}) {
+/** The base with a repository's own settings on top: its rules win, its exclusions add. */
+export function withBase(options: BaseOptions = {}): BaseOptions {
   assertKnown(options);
   const { config, ignores = [], customRules = [], ...rest } = options;
   return {
