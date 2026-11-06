@@ -226,7 +226,7 @@ test("--staged sees a rename break a link in a file it does not touch", () => {
   git("add", "b.md", "c.md");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links no such file/);
+  assert.match(output, /a\.md:3 error docs-lint-links .*\[no such file\]/);
 });
 
 test("--staged sees a deletion of a file that is not markdown", () => {
@@ -237,7 +237,7 @@ test("--staged sees a deletion of a file that is not markdown", () => {
   git("rm", "-q", "i.png");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links/);
+  assert.match(output, /a\.md:3 error docs-lint-links/);
 });
 
 test("--staged sees a renamed heading break a link from another file", () => {
@@ -249,7 +249,7 @@ test("--staged sees a renamed heading break a link from another file", () => {
   git("add", "b.md");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links no heading for #old/);
+  assert.match(output, /a\.md:3 error docs-lint-links .*\[no heading for #old\]/);
 });
 
 test("--staged does not answer for a dead link unrelated to the commit", () => {

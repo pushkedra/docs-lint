@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 export type IsIgnored = (name: string) => boolean;
@@ -17,6 +17,15 @@ const LINT_CONFIG = /^\.markdownlint(?:-cli2)?\.(?:jsonc?|ya?ml|cjs|mjs)$/;
 const SPELLING_CONFIG = /^\.?cspell(?:\.config)?\.(?:jsonc?|ya?ml|js|cjs|mjs|toml)$/i;
 
 export const isRegularFile = (path: string): boolean => lstatSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
+
+export function isUtf8(file: string): boolean {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(file));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Every file under `dir`, stopping at symlinks and at another repository nested inside this one. */
 function walk(dir: string, ignored: IsIgnored): string[] {

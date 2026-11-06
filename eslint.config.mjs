@@ -22,6 +22,13 @@ export default defineConfig([
     },
     rules: {
       // Node's test functions return a promise the runner itself awaits.
+      "@stylistic/max-len": ["error", {
+        code: 120,
+        ignoreRegExpLiterals: true,
+        ignoreStrings: true,
+        ignoreTemplateLiterals: true,
+        ignoreUrls: true,
+      }],
       // A number in a message reads as itself; anything else has to be turned into text on purpose.
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
       "@typescript-eslint/no-floating-promises": ["error", {
