@@ -14,7 +14,9 @@ const BIN = join(PACKAGE, "dist/cli.js");
 
 let root: string;
 
-const write = (name: string, text: string) => writeFileSync(join(root, name), text, "utf8");
+const write = (name: string, text: string) => {
+  writeFileSync(join(root, name), text, "utf8");
+};
 const docsLint = (...args: string[]) => {
   const done = spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
   return { status: done.status, output: done.stdout + done.stderr };
@@ -36,13 +38,15 @@ beforeEach(() => {
   symlinkSync(PACKAGE, join(root, "node_modules/docs-lint"));
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ ignores: ["generated/**"] });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ ignores: [\"generated/**\"] });\n",
   );
   write("cspell.json", cspell());
   write("project-words.txt", "");
 });
 
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true });
+});
 
 test("a clean tree exits 0", () => {
   write("a.md", "# Title\n\nA clean paragraph.\n");
@@ -117,8 +121,21 @@ test("a repository's exclusion reaches all three checks, in a full run and for a
   for (const args of [[], ["generated/a.md", "b.md"]]) {
     const { status, output } = docsLint(...args);
     assert.equal(status, 0, output);
-    assert.doesNotMatch(output, /wrod|MD0|generated\/a\.md/);
+    assert.doesNotMatch(output, /wrod|MD0/);
   }
+});
+
+test("a named file left out by the config or being a symlink says so, and exits 0", () => {
+  mkdirSync(join(root, "generated"));
+  write("generated/a.md", "no heading\n");
+  write("b.md", "# Title\n\nA clean paragraph.\n");
+  symlinkSync("b.md", join(root, "link.md"));
+  const excluded = docsLint("generated/a.md");
+  assert.equal(excluded.status, 0, excluded.output);
+  assert.match(excluded.output, /skipped generated\/a\.md: the config excludes it/);
+  const link = docsLint("link.md");
+  assert.equal(link.status, 0, link.output);
+  assert.match(link.output, /skipped link\.md: a symlink is not read/);
 });
 
 test("a base exclusion holds from node_modules", () => {
@@ -154,6 +171,29 @@ test("a config that cannot load exits 2 rather than reading as findings", () => 
   write("a.md", "# Title\n\nA clean paragraph.\n");
   write(".markdownlint-cli2.mjs", "export default {{{\n");
   assert.equal(docsLint("a.md").status, 2);
+});
+
+test("a config that skips withBase exits 2, because the checks would be off", () => {
+  write("a.md", "# Title\n\n[broken](missing.md)\n");
+  for (const config of ["export default {};\n", "export default { config: { default: true } };\n", "export const x = 1;\n"]) {
+    write(".markdownlint-cli2.mjs", config);
+    const { status, output } = docsLint();
+    assert.equal(status, 2, output);
+    assert.match(output, /withBase/);
+  }
+});
+
+test("a rule that throws exits 2 rather than reading as a finding", () => {
+  write("a.md", "# Title\n\nA clean paragraph.\n");
+  write(
+    ".markdownlint-cli2.mjs",
+    "import { withBase } from \"docs-lint/markdownlint\";\n"
+    + "export default withBase({ customRules: [{ names: [\"boom\"], description: \"x\", tags: [\"x\"], parser: \"none\", "
+    + "function: () => { throw new Error(\"boom\"); } }] });\n",
+  );
+  const { status, output } = docsLint();
+  assert.equal(status, 2, output);
+  assert.match(output, /threw an exception: boom/);
 });
 
 test("--staged from below the repository's root exits 2 and says so", () => {
@@ -222,6 +262,70 @@ test("--fix leaves alone what only an author can decide, and the check still rep
   assert.match(output, /MD029|MD053/);
 });
 
+test("--fix keeps a command's prompt, a line that only looks like a heading and a fragment's case", () => {
+  const text = "# Title\n\n## isMatch\n\n#89 was fixed\n\n#90 too#\n\n```sh\n$ npm install x\n```\n\n[a](#isMatch)\n";
+  write("a.md", text);
+  const { status, output } = docsLint("--fix");
+  assert.equal(status, 1, output);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), text);
+  for (const rule of [/MD014/, /MD018/, /MD020/, /MD051/]) assert.match(output, rule);
+});
+
+test("--fix keeps the code of a table row, and the tables around it until its pipe is escaped", () => {
+  const broken = "| Code | Why |\n| --- | --- |\n| `a ||= b` | one |\n";
+  const loose = "\n|A|B|\n|---|---|\n|c|d|\n";
+  const text = `# Title\n\n${broken}${loose}`;
+  write("a.md", text);
+  const first = docsLint("--fix");
+  assert.equal(first.status, 1, first.output);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), text);
+  assert.match(first.output, /left the tables in a\.md/);
+  assert.match(first.output, /MD056/);
+
+  write("a.md", text.replace("a ||= b", String.raw`a \|\|= b`));
+  const second = docsLint("--fix");
+  assert.equal(second.status, 0, second.output);
+  assert.doesNotMatch(second.output, /left the tables/);
+  const fixed = readFileSync(join(root, "a.md"), "utf8");
+  assert.ok(fixed.includes("| `a \\|\\|= b` | one |"), fixed);
+  assert.ok(fixed.includes("| A | B |"), fixed);
+});
+
+test("--fix reaches a fixed point in one run when a blank line shows a line was never a table's row", () => {
+  write("a.md", "# Title\n\n|A|B|\n|---|---|\n|c|d|\n- `e|f`\n");
+  const first = docsLint("--fix");
+  assert.doesNotMatch(first.output, /left the tables/);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), "# Title\n\n| A | B |\n| --- | --- |\n| c | d |\n\n- `e|f`\n");
+  assert.match(docsLint("--fix").output, /changed 0 file/);
+});
+
+test("--fix holds a table back for any row that has a bare pipe in code, and for nothing else", () => {
+  const held = {
+    "a header": "| `a|b` | c | d |\n| --- | --- | --- |\n| e | f | g |\n",
+    "no outer pipes": "A | B\n--- | ---\n`c|d` | e\n",
+    "one column": "| A |\n| --- |\n| `b|c` |\n",
+    "a quote": "> | A | B |\n> | --- | --- |\n> | `c|d` | e |\n",
+    "a double backtick": "| A | B |\n| --- | --- |\n| ``c|d`` | e |\n",
+  };
+  for (const [name, table] of Object.entries(held)) {
+    write("a.md", `# Title\n\n${table}`);
+    assert.match(docsLint("--fix").output, /left the tables/, name);
+  }
+
+  const free = {
+    "prose": "See `a||b` here.\n\n|A|B|\n|---|---|\n|c|d|\n",
+    "two spans in a row": "|A|B|\n|---|---|\n|`c`|`d`|\n",
+    "a lone backtick": "|A|B|\n|---|---|\n|`|d|\n",
+    "after the table": "|A|B|\n|---|---|\n|c|d|\n\n`e|f`\n",
+  };
+  for (const [name, table] of Object.entries(free)) {
+    write("a.md", `# Title\n\n${table}`);
+    const { output } = docsLint("--fix");
+    assert.doesNotMatch(output, /left the tables/, name);
+    assert.match(readFileSync(join(root, "a.md"), "utf8"), /\| A \| B \|/, name);
+  }
+});
+
 test("--fix keeps a tab in code and reaches a fixed point in one run", () => {
   write("a.md", "# Title\n\n\n\nOne\ntwo\n\n```make\n\tgo build\n```\n");
   assert.equal(docsLint("--fix").status, 0);
@@ -275,7 +379,7 @@ test("a gitignored file is left out, and gitignore: false brings it back", () =>
   assert.equal(docsLint("local/a.md").status, 1);
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ gitignore: false });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ gitignore: false });\n",
   );
   const { status, output } = docsLint();
   assert.equal(status, 1);
@@ -288,11 +392,27 @@ test("a repository's globs narrow all three checks", () => {
   write("b.md", "no heading\nand a wrap wrod\n");
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ globs: ["docs/**/*.md"] });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ globs: [\"docs/**/*.md\"] });\n",
   );
   const { status, output } = docsLint();
   assert.equal(status, 0, output);
   assert.doesNotMatch(output, /wrod/);
+});
+
+test("a negated glob excludes a file from all three checks and from --fix", () => {
+  mkdirSync(join(root, "sk"));
+  const wrapped = "no heading\nand a wrap wrod\n";
+  write("sk/s.md", wrapped);
+  write("b.md", "# Title\n\nA clean paragraph.\n");
+  write(
+    ".markdownlint-cli2.mjs",
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ globs: [\"**/*.md\", \"!sk/**\"] });\n",
+  );
+  const { status, output } = docsLint("--fix");
+  assert.equal(status, 0, output);
+  assert.equal(readFileSync(join(root, "sk/s.md"), "utf8"), wrapped);
+  assert.doesNotMatch(output, /wrod|MD0/);
+  assert.match(output, /1 file\(s\)/);
 });
 
 test("a tool that does not finish in time exits 2 and says so", () => {
@@ -333,7 +453,7 @@ test("the last line totals each check, and spelling is only a warning there", ()
   write("a.md", "# Title\n\n[dead](missing.md) and a wrod\nwrapped.\n\n\nMore.\n");
   const { status, output } = docsLint();
   assert.equal(status, 1);
-  assert.match(output.trim().split("\n").at(-1)!, /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
+  assert.match(output.trim().split("\n").at(-1) ?? "", /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
 });
 
 test("a staged symlink and a file staged then removed are skipped", () => {
@@ -353,7 +473,7 @@ test("output larger than a pipe's buffer arrives whole, with the totals last", (
   const done = spawnSync(process.execPath, [BIN, "a.md"], { cwd: root, encoding: "utf8", maxBuffer: Infinity });
   assert.equal(done.status, 1);
   assert.equal(done.stdout.split("\n").filter((line) => line.includes("error docs-lint-links")).length, 5000);
-  assert.match(done.stdout.trim().split("\n").at(-1)!, /5000 links, 0 hard-wrapped/);
+  assert.match(done.stdout.trim().split("\n").at(-1) ?? "", /5000 links, 0 hard-wrapped/);
 });
 
 test("a config that is absent exits 2 and says so", () => {

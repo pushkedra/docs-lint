@@ -28,8 +28,10 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 
 import { withBase } from "../src/config/markdownlint.ts";
+import { firstWrappedLine, reflowFiles } from "../src/checks/wrap.ts";
 import { type IsIgnored, listFiles } from "../src/files.ts";
-import { firstWrappedLine, ignoredBy, reflow, reflowFiles } from "../src/reflow.ts";
+import { ignoredBy } from "../src/globs.ts";
+import { reflow } from "../src/reflow/reflow.ts";
 
 // A two-space hard break is a line break the author asked for, and it is the one
 // piece of this fixture that trailing-whitespace tooling would silently destroy.
@@ -270,9 +272,9 @@ describe("golden", () => {
 // reflowed.
 describe("hard break after a fold", () => {
   const CASES = {
-    paragraph: [`first\nsecond${SP}${SP}\nthird\n`, `first second${SP}${SP}\nthird\n`],
+    "paragraph": [`first\nsecond${SP}${SP}\nthird\n`, `first second${SP}${SP}\nthird\n`],
     "list item": [`- first\n  second${SP}${SP}\n  third\n`, `- first second${SP}${SP}\n  third\n`],
-    blockquote: [`> first\n> second${SP}${SP}\n> third\n`, `> first second${SP}${SP}\n> third\n`],
+    "blockquote": [`> first\n> second${SP}${SP}\n> third\n`, `> first second${SP}${SP}\n> third\n`],
   };
 
   test("the break is kept", () => {
@@ -299,7 +301,7 @@ describe("what must survive", () => {
   });
 
   test("fenced code keeps its line breaks", () => {
-    assert.ok(out.includes('   ```tf\n   module "x" {\n     source = "y"\n   }\n   ```'));
+    assert.ok(out.includes("   ```tf\n   module \"x\" {\n     source = \"y\"\n   }\n   ```"));
   });
 
   test("fenced code inside a blockquote keeps its line breaks", () => {
@@ -309,8 +311,8 @@ describe("what must survive", () => {
   test("a bare marker still separates two quoted paragraphs", () => {
     assert.ok(
       out.includes(
-        "> First paragraph of the quote, wrapped across two lines.\n>\n" +
-          "> Second paragraph, also wrapped across two lines.",
+        "> First paragraph of the quote, wrapped across two lines.\n>\n"
+        + "> Second paragraph, also wrapped across two lines.",
       ),
     );
   });
@@ -369,14 +371,14 @@ describe("what must survive", () => {
 describe("frontmatter", () => {
   test("is copied through untouched", () => {
     const out = reflow(
-      "---\n" +
-        "title: something\n" +
-        "description: a value\n" +
-        "  that looks wrapped\n" +
-        "---\n" +
-        "\n" +
-        "Body text wrapped\n" +
-        "over two lines.\n",
+      "---\n"
+      + "title: something\n"
+      + "description: a value\n"
+      + "  that looks wrapped\n"
+      + "---\n"
+      + "\n"
+      + "Body text wrapped\n"
+      + "over two lines.\n",
     );
     assert.ok(out.includes("description: a value\n  that looks wrapped\n---"));
     assert.ok(out.includes("Body text wrapped over two lines."));
@@ -420,7 +422,7 @@ describe("reflowFiles", () => {
 // Run against the shipped list itself: its globs end in `/**`, which a glob
 // translator that does not know about the trailing form would get wrong.
 describe("ignores", () => {
-  const ignores = withBase({ ignores: [".claude/skills/**", ".github/**"] }).ignores!;
+  const ignores = withBase({ ignores: [".claude/skills/**", ".github/**"] }).ignores ?? [];
 
   test("an ignored file is skipped", () => {
     withTree([".claude/skills/x/SKILL.md"], (root) => {
@@ -548,7 +550,11 @@ describe("what a fold must not corrupt", () => {
     assert.equal(reflow("Before\nlines\na | b\n:--- | ---:\n1 | 2\n"), "Before lines\na | b\n:--- | ---:\n1 | 2\n");
   });
 
-  const unchanged = (name: string, text: string) => test(name, () => assert.equal(reflow(text), text));
+  const unchanged = (name: string, text: string): void => {
+    void test(name, () => {
+      assert.equal(reflow(text), text);
+    });
+  };
 
   unchanged("a fence opened on a list marker", "- ```js\n  a\n  b\n  ```\n");
   unchanged("a fence opened on a numbered marker", "1. ```\n   a\n   b\n   ```\n");

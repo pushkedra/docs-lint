@@ -2,7 +2,12 @@
 // `.markdownlint-cli2.mjs`. JavaScript rather than JSONC there, because `extends` carries a config's
 // rules but not its `ignores`, and a repository has to add exclusions without losing these.
 
-import { LINKS_RULE, linksRule } from "../links.ts";
+import { LINKS_RULE, linksRule } from "../rules/links/rule.ts";
+
+/** Set by the command for markdownlint-cli2, which loads this file in its own process. */
+export const STRUCTURED_OUTPUT_ENV = "DOCS_LINT_STRUCTURED_OUTPUT";
+export const FIX_PASS_ENV = "DOCS_LINT_FIX_PASS";
+export const FIX_PASS_KEEPING_TABLES = "keeping-tables";
 
 /** Options of the `docs-lint-links` rule, set under `config` in `withBase`. */
 export interface LinkOptions {
@@ -12,7 +17,10 @@ export interface LinkOptions {
   deniedUrls?: (RegExp | string)[];
   /** Globs of files whose links are not checked, while the rest of the lint still applies to them. */
   excludedSources?: string[];
-  /** Paths outside the repository, relative to its root, that tracked files may link into, such as `../sibling`. Those links must still resolve. */
+  /**
+   * Paths outside the repository, relative to its root, that tracked files may link into, such as
+   * `../sibling`. Those links must still resolve.
+   */
   allowedRoots?: string[];
 }
 
@@ -25,9 +33,12 @@ export interface BaseOptions {
   config?: { "docs-lint-links"?: LinkOptions | false; [rule: string]: unknown };
   /** Globs to exclude from all three checks, on top of the base's `.git`, `node_modules`, `.idea` and `.vscode`. */
   ignores?: string[];
-  /** Which files count as markdown. Default `["**\/*.md"]`. */
+  /** Which files count as markdown. Default `["**\/*.md"]`. An entry starting with `!` excludes, as `ignores` does. */
   globs?: string[];
-  /** Whether what is gitignored is left out. Default `true`; `false` reads the whole tree, for a repository that lints a gitignored folder too. */
+  /**
+   * Whether what is gitignored is left out. Default `true`; `false` reads the whole tree, for a repository
+   * that lints a gitignored folder too.
+   */
   gitignore?: boolean | string;
   /** More markdownlint rules, beside the base's. */
   customRules?: unknown[];
@@ -45,7 +56,7 @@ export interface BaseOptions {
   noInlineConfig?: boolean;
   /** A markdownlint-cli2 option. Default `true` here. */
   noProgress?: boolean;
-  /** A markdownlint-cli2 option. The command's totals read its default format. */
+  /** A markdownlint-cli2 option, for running it directly. The command prints findings itself. */
   outputFormatters?: unknown[];
   /** A markdownlint-cli2 option. */
   overrides?: unknown[];
@@ -58,12 +69,28 @@ const OPTIONS = [
   "modulePaths", "noBanner", "noInlineConfig", "noProgress", "outputFormatters", "overrides", "showFound",
 ];
 const LINK_LISTS = ["excludedUrls", "deniedUrls", "excludedSources", "allowedRoots"];
+const URL_LISTS = ["excludedUrls", "deniedUrls"];
 
 const unknownOption = (name: string, known: string[]) => new Error(`unknown option ${name}; known: ${known.join(", ")}`);
+
+/** A pattern that cannot compile would otherwise throw inside the rule, on every file, and read as findings. */
+function assertCompiles(name: string, patterns: (RegExp | string)[]): void {
+  for (const pattern of patterns) {
+    try {
+      RegExp(pattern);
+    } catch (error) {
+      throw new Error(`${name} of ${LINKS_RULE}: ${(error as Error).message}`, { cause: error });
+    }
+  }
+}
 
 /** Refuse a name nothing reads: a typo would otherwise leave a check running as if it were configured. */
 function assertKnown(options: BaseOptions): void {
   for (const name of Object.keys(options)) if (!OPTIONS.includes(name)) throw unknownOption(name, OPTIONS);
+  // A string would be read one character at a time, and drop whatever those characters happen to match.
+  for (const name of ["ignores", "globs"] as const) {
+    if (options[name] !== undefined && !Array.isArray(options[name])) throw new Error(`${name} must be an array`);
+  }
   for (const name of Object.keys(options.config ?? {})) {
     if (name !== LINKS_RULE && name.toLowerCase().startsWith("docs-lint")) throw unknownOption(name, [LINKS_RULE]);
   }
@@ -72,6 +99,7 @@ function assertKnown(options: BaseOptions): void {
   for (const [name, value] of Object.entries(links as object)) {
     if (!LINK_LISTS.includes(name)) throw unknownOption(`${name} of ${LINKS_RULE}`, LINK_LISTS);
     if (!Array.isArray(value)) throw new Error(`${name} of ${LINKS_RULE} must be an array`);
+    if (URL_LISTS.includes(name)) assertCompiles(name, value as (RegExp | string)[]);
   }
 }
 
@@ -93,7 +121,7 @@ const base = {
     // A paragraph is one line. Hard-wrapped prose reads worse on a narrow screen outside a
     // rendered preview, where the column width changes from paragraph to paragraph, and it
     // diffs worse: editing two words of one sentence shows as the one line it is, not as every
-    // wrapped line the edit touched. `lib/reflow.mjs` folds the other way.
+    // wrapped line the edit touched. `reflow/reflow.ts` folds the other way.
     MD013: false, // line-length
 
     // Without this the rule counts a frontmatter `title:` as the document's first h1 and then
@@ -149,20 +177,42 @@ const base = {
 
 // Their fixes change what the text says rather than how it is laid out: a list restarted after an
 // image is renumbered, a marker that is a diff's `+` becomes `-`, a colon goes from a heading, the spaces
-// go from a code span, an unused definition is deleted. `--fix` leaves them, and the check still reports.
+// go from a code span, an unused definition is deleted, a command loses its `$`, `#89` becomes a heading,
+// a fragment changes case. `--fix` leaves them, and the check still reports.
 const LEFT_TO_THE_AUTHOR = Object.fromEntries(
-  ["MD004", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD053"].map((rule) => [rule, false] as const),
+  ["MD004", "MD014", "MD018", "MD020", "MD026", "MD029", "MD037", "MD038", "MD049", "MD050", "MD051", "MD053"]
+    .map((rule) => [rule, false] as const),
 );
+
+interface FormatterOptions {
+  results: unknown[];
+  logMessage: (message: string) => void;
+}
+
+const printFindings = ({ results, logMessage }: FormatterOptions): Promise<void> => {
+  logMessage(JSON.stringify(results));
+  return Promise.resolve();
+};
+
+// The command reads findings as data rather than parsing the text a person reads.
+const STRUCTURED_OUTPUT = { noBanner: true, noProgress: true, outputFormatters: [[printFindings]] };
 
 /** The base with a repository's own settings on top: its rules win, its exclusions add. */
 export function withBase(options: BaseOptions = {}): BaseOptions {
   assertKnown(options);
   const { config, ignores = [], customRules = [], ...rest } = options;
+  const fixPass = process.env[FIX_PASS_ENV];
   return {
     ...base,
     ...rest,
     customRules: [...base.customRules, ...customRules],
-    config: { ...base.config, ...config, ...(process.env.DOCS_LINT_FIX_PASS ? LEFT_TO_THE_AUTHOR : {}) },
+    config: {
+      ...base.config,
+      ...config,
+      ...(fixPass ? LEFT_TO_THE_AUTHOR : {}),
+      ...(fixPass === FIX_PASS_KEEPING_TABLES ? { MD060: false } : {}),
+    },
     ignores: [...base.ignores, ...ignores],
+    ...(process.env[STRUCTURED_OUTPUT_ENV] ? STRUCTURED_OUTPUT : {}),
   };
 }

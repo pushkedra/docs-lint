@@ -1,5 +1,7 @@
 # docs-lint
 
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=pushkedra_docs-lint&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pushkedra_docs-lint) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pushkedra_docs-lint&metric=coverage)](https://sonarcloud.io/component_measures?id=pushkedra_docs-lint&metric=coverage) [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.18-green.svg)](https://nodejs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 One command to check the markdown that people and AI agents both read: `CLAUDE.md`, skills, specifications, wikis. It runs [markdownlint](https://github.com/DavidAnson/markdownlint-cli2), an American-English spell check with [cspell](https://github.com/streetsidesoftware/cspell), a check for hard-wrapped paragraphs, which no lint rule can see, and a check that every link leads somewhere. The rules ship as a versioned package, so every repository holds the same ones and a change reaches each through one version bump.
 
 ## Install
@@ -25,7 +27,7 @@ export default withBase({
 
 The package ships types, so an editor completes and describes every option of `withBase`, and `// @ts-check` underlines a mistake as you type. `node_modules/docs-lint/dist/config/markdownlint.d.ts` is the reference for reading rather than completing. A name nothing reads is refused when the command runs, with exit 2 and the names it knows, so a typo cannot quietly leave a check without its setting.
 
-`cspell.json`, whose `ignorePaths` only matter to an editor's spell checker, because the command reads `ignores`:
+`cspell.json`. Its `ignorePaths` applies to the command as well as to an editor's spell checker, so a path listed only there loses its spelling check alone. `ignores` covers all three checks, and repeating an exclusion here is only for the editor:
 
 ```json
 {
@@ -39,7 +41,7 @@ The package ships types, so an editor completes and describes every option of `w
 
 `project-words.txt`, this repository's terms, one per line. It may be empty, but it has to exist.
 
-Keep `node_modules` in `.gitignore`.
+Keep `node_modules` in `.gitignore`. In a repository without a `package.json`, the install creates one and a lockfile: commit both, because `npm ci` needs the lockfile, and add `"private": true`.
 
 ## Run
 
@@ -58,19 +60,19 @@ Run it from the repository root. `"lint": "docs-lint"` under `scripts` in `packa
 | 1 | a lint finding, a broken link or a hard-wrapped paragraph |
 | 2 | a check could not run: a missing config, a broken one, a rival one, an unknown option, a bad argument, a file not in UTF-8, a tool over its time limit |
 
-The spell check only warns, because a proper name or a verbatim quote is flagged as readily as a misspelling. Cyrillic text is skipped, since it is another language rather than an English misspelling. A tool that runs longer than 600 seconds is stopped; `DOCS_LINT_TIMEOUT` sets another limit, in seconds.
+The totals on the last line count hard-wrapped files, and each such file shows its first wrapped paragraph. The spell check only warns, because a proper name or a verbatim quote is flagged as readily as a misspelling. Cyrillic text is skipped, since it is another language rather than an English misspelling. A tool that runs longer than 600 seconds is stopped; `DOCS_LINT_TIMEOUT` sets another limit, in seconds.
 
 ## What it reads
 
-In a repository, git's list decides: tracked files and untracked ones, without what is gitignored or held by a nested repository. `gitignore: false` in `withBase` reads the whole tree instead, for a repository that wants a gitignored folder linted too. A file named on the command line is read either way. `globs` in `withBase` narrows which files count as markdown.
+In a repository, git's list decides: tracked files and untracked ones, without what is gitignored or held by a nested repository. `gitignore: false` in `withBase` reads the whole tree instead, for a repository that wants a gitignored folder linted too. A file named on the command line is read either way. `globs` in `withBase` narrows which files count as markdown, and an entry starting with `!` excludes, as `ignores` does. A named file the config excludes, or a named symlink, is skipped with a notice and exit 0, so that a hook can pass any file.
 
 A symlink is never read or written through, so a loop cannot hang a run and `--fix` cannot change a file outside the repository. What it points at is linted as itself if it is in the repository.
 
 ## What `--fix` changes
 
-It unwraps paragraphs and applies the lint fixes that only change layout, repeating until the text stops moving, and then reports what is left. Code, tables, frontmatter, GitHub alerts, containers, math, template tags, definition lists and `@` imports keep their line breaks. It does not apply fixes that change what the text says, such as renumbering a list or deleting an unused link definition; the check still reports those for an author to decide.
+It unwraps paragraphs and applies the lint fixes that only change layout, repeating until the text stops moving, and then reports what is left. Code, tables, frontmatter, GitHub alerts, containers, math, template tags, definition lists and `@` imports keep their line breaks. It does not apply fixes that change what the text says, such as renumbering a list, deleting an unused link definition, removing a command's `$` or making a heading of `#89`; the check still reports those for an author to decide. A bare `|` in code inside a table row is one of those: the row breaks into extra cells, and spacing that pipe would rewrite the code. `--fix` says so and leaves all the tables in that file as they are until it is written `\|`.
 
-A file whose line breaks are its content opts out of the hard-wrap check with a line holding `<!-- markdownlint-disable hard-wrap -->`, or `<!-- markdownlint-disable -->`, which also turns the lint off. A verbatim record, such as an exported conversation, belongs in `ignores`, because a fix has no undo in a file git does not track.
+A file whose line breaks are its content opts out of the hard-wrap check with a line holding `<!-- markdownlint-disable hard-wrap -->`, or `<!-- markdownlint-disable -->`, which also turns the lint off. Either one covers the whole file, and a later `restore` or `enable` does not bring the check back. A verbatim record, such as an exported conversation, belongs in `ignores`, because a fix has no undo in a file git does not track.
 
 ## Links
 
@@ -78,7 +80,7 @@ The rule `docs-lint-links` runs with the lint, on links, images, reference defin
 
 - **A relative link** must reach a file in its exact case, whatever the local filesystem accepts, and in a markdown file the heading its fragment names, by the name MD051 gives it.
 - **From a tracked file**, it must also stay inside the repository and off gitignored paths: both resolve on the machine that wrote them and nowhere else. A target that is untracked but not ignored passes, because the same commit may add it. A repository kept beside another names it in `allowedRoots`, and links there must still resolve.
-- **An external link** is checked for form only, and no request is sent: it must parse, use `http`, `https`, `mailto` or `tel`, or be an image's `data:` URL, and not match a denied pattern. The base denies `http://`, except to this machine: `localhost`, `127.0.0.1`, `0.0.0.0` and `[::1]`.
+- **An external link** is checked for form only, and no request is sent: it must parse, use `http`, `https`, `mailto` or `tel`, or be an image's `data:` URL, and not match a denied pattern. The base denies `http://`, except to this machine: `localhost`, `*.localhost`, `127.0.0.1`, `0.0.0.0` and `[::1]`.
 - **`--staged`** also reads the other tracked markdown for links into what the commit deletes, renames or edits, because a renamed file or heading breaks links in files the commit does not touch. It reads the working tree, as the rest of the lint does.
 
 A repository sets its own lists in `.markdownlint-cli2.mjs`. `excludedUrls` and `deniedUrls` take a `RegExp` or a string holding one, tested against the link's destination, and an exclusion wins over a denial. `excludedSources` takes globs of files whose links are not checked, while the rest of the lint still applies to them, such as `**/assets/**` for templates whose links resolve once installed elsewhere. `allowedRoots` takes paths relative to the repository's root.
@@ -100,9 +102,9 @@ One link is excused with `<!-- markdownlint-disable-next-line docs-lint-links --
 
 ## Migrating
 
-1. Replace, do not add: remove `.markdownlint-cli2.jsonc`, `.markdownlint.json`, `.cspell.json` and the like. A rival config would silently win, so the command refuses to run beside one.
-2. Remove direct pins of `markdownlint-cli2` and `cspell`, and point a hook at `npx --no-install docs-lint --staged`.
-3. Name in `ignores` what should not be linted: the base excludes only `.git`, `node_modules`, `.idea` and `.vscode`, so generated or installed markdown, such as `.claude/skills`, is linted until it is named. Saved web pages and verbatim exports belong there too.
+1. Replace, do not add: remove `.markdownlint-cli2.jsonc`, `.markdownlint.json`, `.cspell.json` and the like, and rewrite an existing `cspell.json` as shown above. A rival config would silently win, so the command refuses to run beside one. A nested copy stops the run too; if it is a template or a fixture, name it in `ignores`. A link to a config you removed is now a finding.
+2. Remove direct pins of `markdownlint-cli2` and `cspell`, and point a hook at `npx --no-install docs-lint --staged`. Remove what the old setup left: scripts that call the removed tools, and instructions telling people or agents to run them.
+3. Name in `ignores` what should not be linted, including the old config's exclusions: the base excludes only `.git`, `node_modules`, `.idea` and `.vscode`, so generated or installed markdown, such as `.claude/skills`, is linted until it is named. Saved web pages and verbatim exports belong there too.
 4. Run it and expect a lot on a repository that has never been linted to these rules. `--fix` clears most layout findings; review its `git diff` before committing. `--staged` then holds each file to the rules as it is next edited.
 
 ## What belongs where
@@ -117,6 +119,10 @@ The package holds what is true of any repository: the rules, the British forms A
 ## Updating
 
 Pin an exact version. A new rule then reaches a repository when its bump is reviewed, not everywhere at once. [CHANGELOG.md](CHANGELOG.md) says what each version changes.
+
+## Contributing
+
+After `npm ci`, `npm run setup:hooks` turns on the pre-commit hook in `.githooks/`. It is a separate step so that the published package carries no script that touches a consumer's git config.
 
 ## License
 

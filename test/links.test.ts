@@ -54,7 +54,9 @@ beforeEach(() => {
   write(".gitignore", "node_modules\nsecret/\n");
 });
 
-afterEach(() => rmSync(top, { recursive: true, force: true }));
+afterEach(() => {
+  rmSync(top, { recursive: true, force: true });
+});
 
 test("a relative link to a file that exists passes, and one to nothing is a finding", () => {
   write("docs/b.md", page("Target."));
@@ -79,7 +81,7 @@ test("a link is relative to its file, a leading slash to the repository's root",
 test("a reference definition, an image and an HTML attribute are all checked", () => {
   assertFinding("[r][x]\n\n[x]: missing.md", /no such file/);
   assertFinding("![i](missing.png)", /no such file/);
-  assertFinding('<img src="missing.png" alt="x">', /no such file/);
+  assertFinding("<img src=\"missing.png\" alt=\"x\">", /no such file/);
 });
 
 test("what is not a link is not checked", () => {
@@ -146,6 +148,8 @@ test("an external link is checked for form and sends nothing", () => {
 test("the base denies plain HTTP, except to this machine", () => {
   assertFinding("[a](http://example.com)", /denied by/);
   assertFinding("[a](http://localhost.example.com)", /denied by/);
+  assertFinding("[a](http://app.localhost.example.com)", /denied by/);
+  assertClean("[a](http://app.localhost:4200) [b](http://a.b.localhost/x)");
   assertClean("[a](http://localhost:3000/x) [b](https://localhost) <http://127.0.0.1> [c](http://0.0.0.0:80) [d](http://[::1]:3000)");
 });
 
@@ -167,7 +171,7 @@ test("a destination is read as it means, with its escapes and references resolve
 
 test("a repository can allow its sibling, whose links must still resolve", () => {
   writeFileSync(join(top, "outside.md"), page("Target."));
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": { allowedRoots: ["../"] } } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": { allowedRoots: [\"../\"] } } }"));
   write("a.md", page("[o](../outside.md)"));
   git("add", "a.md");
   assert.equal(docsLint("a.md").status, 0);
@@ -178,19 +182,19 @@ test("a repository can allow its sibling, whose links must still resolve", () =>
 });
 
 test("a repository can exclude a URL, as a RegExp or a string, past the base's denial", () => {
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": { excludedUrls: [/^http:\\/\\/old\\.example/, "^generated/"] } } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": { excludedUrls: [/^http:\\/\\/old\\.example/, \"^generated/\"] } } }"));
   assertClean("[a](http://old.example/x) [b](generated/missing.md)");
   assertFinding("[a](http://other.example/x)", /denied by/);
 });
 
 test("a repository can deny a URL of its own", () => {
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": { deniedUrls: ["^https://jira\\\\.corp"] } } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": { deniedUrls: [\"^https://jira\\\\.corp\"] } } }"));
   assertFinding("[a](https://jira.corp/KEY-1)", /denied by/);
   assertClean("[a](https://example.com)");
 });
 
 test("a source excluded from links keeps the rest of the lint", () => {
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": { excludedSources: ["records/**"] } } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": { excludedSources: [\"records/**\"] } } }"));
   write("records/r.md", page("[dead](missing.md)"));
   assert.equal(docsLint("records/r.md").status, 0);
   write("records/r.md", page("[dead](missing.md)\n\n\n"));
@@ -202,14 +206,14 @@ test("a source excluded from links keeps the rest of the lint", () => {
 
 test("a comment disables the rule for one line, and a repository can turn it off", () => {
   assertClean("<!-- markdownlint-disable-next-line docs-lint-links -->\n[dead](missing.md)");
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": false } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": false } }"));
   assertClean("[dead](missing.md)");
 });
 
 test("withBase keeps the link rule beside a repository's own custom rules", () => {
   write(
     ".markdownlint-cli2.mjs",
-    stub('{ customRules: [{ names: ["own"], description: "own", tags: ["custom"], parser: "none", function: () => {} }] }'),
+    stub("{ customRules: [{ names: [\"own\"], description: \"own\", tags: [\"custom\"], parser: \"none\", function: () => {} }] }"),
   );
   assertFinding("[dead](missing.md)", /no such file/);
 });
@@ -224,7 +228,7 @@ test("--staged sees a rename break a link in a file it does not touch", () => {
   git("add", "b.md", "c.md");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links no such file/);
+  assert.match(output, /a\.md:3 error docs-lint-links .*\[no such file\]/);
 });
 
 test("--staged sees a deletion of a file that is not markdown", () => {
@@ -235,7 +239,7 @@ test("--staged sees a deletion of a file that is not markdown", () => {
   git("rm", "-q", "i.png");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links/);
+  assert.match(output, /a\.md:3 error docs-lint-links/);
 });
 
 test("--staged sees a renamed heading break a link from another file", () => {
@@ -247,7 +251,7 @@ test("--staged sees a renamed heading break a link from another file", () => {
   git("add", "b.md");
   const { status, output } = docsLint("--staged");
   assert.equal(status, 1, output);
-  assert.match(output, /a\.md:3 docs-lint-links no heading for #old/);
+  assert.match(output, /a\.md:3 error docs-lint-links .*\[no heading for #old\]/);
 });
 
 test("--staged does not answer for a dead link unrelated to the commit", () => {
@@ -297,17 +301,21 @@ test("git failing is reported rather than skipping the tracked-file checks", () 
 });
 
 test("a repository's RegExp with the g flag gives the same answer every time", () => {
-  write(".markdownlint-cli2.mjs", stub('{ config: { "docs-lint-links": { excludedUrls: [/^missing/g] } } }'));
+  write(".markdownlint-cli2.mjs", stub("{ config: { \"docs-lint-links\": { excludedUrls: [/^missing/g] } } }"));
   assertClean("[a](missing-a.md) [b](missing-b.md) [c](missing-c.md)");
 });
 
 test("a misspelled option is refused, with the names that exist", () => {
   write("a.md", page("Body."));
   const cases: [string, RegExp][] = [
-    ['{ ignore: ["x"] }', /unknown option ignore; known: config, ignores/],
-    ['{ config: { "docs-lint-links": { excludeUrls: [] } } }', /unknown option excludeUrls of docs-lint-links; known: excludedUrls/],
-    ['{ config: { "docs-lint-link": false } }', /unknown option docs-lint-link; known: docs-lint-links/],
-    ['{ config: { "docs-lint-links": { excludedUrls: "x" } } }', /excludedUrls of docs-lint-links must be an array/],
+    ["{ ignore: [\"x\"] }", /unknown option ignore; known: config, ignores/],
+    ["{ config: { \"docs-lint-links\": { excludeUrls: [] } } }", /unknown option excludeUrls of docs-lint-links; known: excludedUrls/],
+    ["{ config: { \"docs-lint-link\": false } }", /unknown option docs-lint-link; known: docs-lint-links/],
+    ["{ config: { \"docs-lint-links\": { excludedUrls: \"x\" } } }", /excludedUrls of docs-lint-links must be an array/],
+    ["{ config: { \"docs-lint-links\": { excludedUrls: [\"(\"] } } }", /excludedUrls of docs-lint-links: Invalid regular expression/],
+    ["{ config: { \"docs-lint-links\": { deniedUrls: [\"(\"] } } }", /deniedUrls of docs-lint-links: Invalid regular expression/],
+    ["{ ignores: \"x\" }", /ignores must be an array/],
+    ["{ globs: \"*.md\" }", /globs must be an array/],
   ];
   for (const [options, pattern] of cases) {
     write(".markdownlint-cli2.mjs", stub(options));
@@ -321,7 +329,7 @@ test("the options markdownlint-cli2 knows and the rule's own pass", () => {
   write("a.md", page("Body."));
   write(
     ".markdownlint-cli2.mjs",
-    stub('{ noInlineConfig: false, showFound: false, config: { MD013: false, "docs-lint-links": { excludedUrls: [], deniedUrls: [], excludedSources: [], allowedRoots: [] } } }'),
+    stub("{ noInlineConfig: false, showFound: false, config: { MD013: false, \"docs-lint-links\": { excludedUrls: [], deniedUrls: [], excludedSources: [], allowedRoots: [] } } }"),
   );
   const { status, output } = docsLint("a.md");
   assert.equal(status, 0, output);

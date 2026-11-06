@@ -33,23 +33,25 @@ before(() => {
   symlinkSync(PACKAGE, join(root, "node_modules/docs-lint"));
 });
 
-after(() => rmSync(root, { recursive: true, force: true }));
+after(() => {
+  rmSync(root, { recursive: true, force: true });
+});
 
 test("a correct config type-checks", () => {
   const { status, output } = check(
-    '{ ignores: ["x/**"], gitignore: false, config: { MD013: false, "docs-lint-links": { excludedUrls: [/^a/, "^b"], allowedRoots: ["../s"] } } }',
+    "{ ignores: [\"x/**\"], gitignore: false, config: { MD013: false, \"docs-lint-links\": { excludedUrls: [/^a/, \"^b\"], allowedRoots: [\"../s\"] } } }",
   );
   assert.equal(status, 0, output);
 });
 
 test("a misspelled option of withBase is a type error", () => {
-  const { status, output } = check('{ ignore: ["x/**"] }');
+  const { status, output } = check("{ ignore: [\"x/**\"] }");
   assert.notEqual(status, 0);
   assert.match(output, /ignore/);
 });
 
 test("a misspelled option of the link rule is a type error", () => {
-  const { status, output } = check('{ config: { "docs-lint-links": { excludeUrls: [] } } }');
+  const { status, output } = check("{ config: { \"docs-lint-links\": { excludeUrls: [] } } }");
   assert.notEqual(status, 0);
   assert.match(output, /excludeUrls/);
 });
