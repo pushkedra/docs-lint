@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the package follows [Semantic Versioning](https://semver.org/). A new or tightened rule is at least a minor release, because it can fail a build that passed before.
 
+## [Unreleased]
+
+### Fixed
+
+- On Windows, a repository with enough markdown files to pass the command-line limit exited 2 with no reason given. The file list no longer goes through a command line, on any platform.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added

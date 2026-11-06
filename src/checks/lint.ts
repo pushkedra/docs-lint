@@ -1,37 +1,18 @@
 /** The markdown lint and the link rule, through markdownlint-cli2. */
 
+import { fileURLToPath } from "node:url";
 import { STRUCTURED_OUTPUT_ENV, FIX_PASS_ENV, FIX_PASS_KEEPING_TABLES } from "../config/markdownlint.ts";
 import { fail } from "../output.ts";
 import type { FileFinding } from "../rules/links/rule.ts";
-import { runTool } from "../tools.ts";
+import { runScript } from "../tools.ts";
 
-// Under every platform's limit on a command line that this package is tested on, with room for the rest.
-const MAX_ARGUMENT_BYTES = 200_000;
+const WORKER = fileURLToPath(new URL("lint-worker.js", import.meta.url));
 
 export interface LintResult {
   found: boolean;
   findings: FileFinding[];
   /** Anything markdownlint-cli2 printed that is not findings. */
   unparsed: string;
-}
-
-/** `files` in portions a command line can hold. */
-function portions(files: string[]): string[][] {
-  const result: string[][] = [];
-  let portion: string[] = [];
-  let bytes = 0;
-  for (const file of files) {
-    const size = Buffer.byteLength(file) + 2;
-    if (bytes + size > MAX_ARGUMENT_BYTES && portion.length) {
-      result.push(portion);
-      portion = [];
-      bytes = 0;
-    }
-    portion.push(file);
-    bytes += size;
-  }
-  result.push(portion);
-  return result;
 }
 
 function parseFindings(stdout: string): FileFinding[] | null {
@@ -46,22 +27,16 @@ function parseFindings(stdout: string): FileFinding[] | null {
 export function runLint(files: string[], { fix = false, keepTables = false } = {}): LintResult {
   const fixPass = fix ? { [FIX_PASS_ENV]: keepTables ? FIX_PASS_KEEPING_TABLES : "1" } : {};
   const env = { ...process.env, [STRUCTURED_OUTPUT_ENV]: "1", ...fixPass };
-  const runs = portions(files).map((portion) =>
-    // A leading colon makes the path literal: `app/(group)/x.md` and `!x.md` would otherwise be patterns,
-    // match nothing, and pass.
-    runTool("markdownlint-cli2", ["--no-globs", ...portion.map((file) => `:${file}`), ...(fix ? ["--fix"] : [])], { env }),
-  );
-  const failed = runs.find(({ status }) => status === null || status > 1);
-  if (failed) fail(`markdownlint-cli2 failed\n${failed.stdout}${failed.stderr}`);
-
-  const findings: FileFinding[] = [];
-  let unparsed = "";
-  for (const { stdout, stderr } of runs) {
-    const parsed = parseFindings(stdout);
-    if (parsed) findings.push(...parsed);
-    else unparsed += stdout + stderr;
+  // A leading colon makes the path literal: `app/(group)/x.md` and `!x.md` would otherwise be patterns,
+  // match nothing, and pass.
+  const argv = ["--no-globs", ...files.map((file) => `:${file}`), ...(fix ? ["--fix"] : [])];
+  const { status, stdout, stderr, error } = runScript("markdownlint-cli2", WORKER, [], { env, input: JSON.stringify(argv) });
+  if (status === null || status > 1) {
+    fail(`markdownlint-cli2 failed\n${[error?.message, stdout, stderr].filter(Boolean).join("\n")}`);
   }
-  return { found: runs.some(({ status }) => status === 1), findings, unparsed };
+
+  const parsed = parseFindings(stdout);
+  return { found: status === 1, findings: parsed ?? [], unparsed: parsed ? "" : stdout + stderr };
 }
 
 /** A finding in the form markdownlint-cli2 prints by default, which editors and people already read. */
