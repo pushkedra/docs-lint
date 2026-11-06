@@ -1,5 +1,5 @@
 // @ts-check
 
-import { withBase } from "./config/markdownlint.mjs";
+import { withBase } from "./dist/config/markdownlint.js";
 
 export default withBase();

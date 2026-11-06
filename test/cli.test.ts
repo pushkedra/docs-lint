@@ -10,16 +10,16 @@ import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE = resolve(fileURLToPath(import.meta.url), "../..");
-const BIN = join(PACKAGE, "bin/docs-lint.mjs");
+const BIN = join(PACKAGE, "dist/cli.js");
 
-let root;
+let root: string;
 
-const write = (name, text) => writeFileSync(join(root, name), text, "utf8");
-const docsLint = (...args) => {
+const write = (name: string, text: string) => writeFileSync(join(root, name), text, "utf8");
+const docsLint = (...args: string[]) => {
   const done = spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
   return { status: done.status, output: done.stdout + done.stderr };
 };
-const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
 
 const cspell = (extra = {}) =>
   JSON.stringify({
@@ -333,7 +333,7 @@ test("the last line totals each check, and spelling is only a warning there", ()
   write("a.md", "# Title\n\n[dead](missing.md) and a wrod\nwrapped.\n\n\nMore.\n");
   const { status, output } = docsLint();
   assert.equal(status, 1);
-  assert.match(output.trim().split("\n").at(-1), /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
+  assert.match(output.trim().split("\n").at(-1)!, /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
 });
 
 test("a staged symlink and a file staged then removed are skipped", () => {
@@ -346,6 +346,14 @@ test("a staged symlink and a file staged then removed are skipped", () => {
   renameSync(join(root, "d.md"), join(root, "e.md"));
   const { status, output } = docsLint("--staged");
   assert.equal(status, 0, output);
+});
+
+test("output larger than a pipe's buffer arrives whole, with the totals last", () => {
+  write("a.md", `# Title\n\n${"[dead](missing.md)\n\n".repeat(5000)}`);
+  const done = spawnSync(process.execPath, [BIN, "a.md"], { cwd: root, encoding: "utf8", maxBuffer: Infinity });
+  assert.equal(done.status, 1);
+  assert.equal(done.stdout.split("\n").filter((line) => line.includes("error docs-lint-links")).length, 5000);
+  assert.match(done.stdout.trim().split("\n").at(-1)!, /5000 links, 0 hard-wrapped/);
 });
 
 test("a config that is absent exits 2 and says so", () => {

@@ -8,11 +8,12 @@
  * checked nothing must not read the same as a clean one.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from "node:child_process";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { BaseOptions } from "./config/markdownlint.ts";
 
 const USAGE = `usage: docs-lint [--fix] [--staged] [file.md...]
 
@@ -30,9 +31,15 @@ const MAX_FIX_PASSES = 5;
 
 const require = createRequire(import.meta.url);
 
-function fail(message) {
+function fail(message: string): never {
   console.error(`docs-lint: ${message}`);
   process.exit(2);
+}
+
+/** Exit once stdout has drained: `process.exit` drops whatever a pipe has not taken yet. */
+async function finish(code: number): Promise<never> {
+  await new Promise((drained) => process.stdout.write("", drained));
+  process.exit(code);
 }
 
 // Node exits 1 on an uncaught error, which a hook would read as findings.
@@ -41,15 +48,16 @@ process.on("uncaughtException", (error) => fail(error.message));
 // Before anything below is loaded: on an older Node, a dependency's syntax error exits 1, and a tool's
 // complaint on stdout reads as spelling findings.
 const required = require("../package.json").engines.node.replace(/^>=/, "");
-const atLeast = (have, need) => {
-  const [a, b] = [have, need].map((version) => version.split(".").map(Number));
-  return a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1]);
+const atLeast = (have: string, need: string): boolean => {
+  const [haveMajor = 0, haveMinor = 0] = have.split(".").map(Number);
+  const [needMajor = 0, needMinor = 0] = need.split(".").map(Number);
+  return haveMajor > needMajor || (haveMajor === needMajor && haveMinor >= needMinor);
 };
 if (!atLeast(process.versions.node, required)) fail(`needs Node ${required} or later, and this is ${process.versions.node}`);
 
-const { isRegularFile, listFiles, rivalConfigs } = await import("../lib/files.mjs");
-const { LINKS_RULE, linksInto } = await import("../lib/links.mjs");
-const { firstWrappedLine, globToRegExp, ignoredBy, reflowFiles } = await import("../lib/reflow.mjs");
+const { isRegularFile, listFiles, rivalConfigs } = await import("./files.ts");
+const { LINKS_RULE, linksInto } = await import("./links.ts");
+const { firstWrappedLine, globToRegExp, ignoredBy, reflowFiles } = await import("./reflow.ts");
 
 const timeoutMs = 1000 * (Number(process.env.DOCS_LINT_TIMEOUT) || DEFAULT_TIMEOUT_SECONDS);
 
@@ -57,7 +65,7 @@ const timeoutMs = 1000 * (Number(process.env.DOCS_LINT_TIMEOUT) || DEFAULT_TIMEO
  * A tool's executable, resolved from this package. A repository may pin another version of the same
  * tool, and npm then nests the one this package asked for: `npx` would run the repository's.
  */
-function toolBin(name) {
+function toolBin(name: string): string {
   let dir = dirname(require.resolve(name));
   for (;;) {
     const manifest = join(dir, "package.json");
@@ -69,34 +77,34 @@ function toolBin(name) {
   }
 }
 
-function runTool(name, args, options = {}) {
+function runTool(name: string, args: string[], options: Partial<SpawnSyncOptionsWithStringEncoding> = {}): SpawnSyncReturns<string> {
   const done = spawnSync(process.execPath, [toolBin(name), ...args], {
     encoding: "utf8",
     maxBuffer: Infinity,
     timeout: timeoutMs,
     ...options,
   });
-  if (/** @type {NodeJS.ErrnoException | undefined} */ (done.error)?.code === "ETIMEDOUT") fail(`${name} did not finish in ${timeoutMs / 1000} s; DOCS_LINT_TIMEOUT sets the limit`);
+  if ((done.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") fail(`${name} did not finish in ${timeoutMs / 1000} s; DOCS_LINT_TIMEOUT sets the limit`);
   return done;
 }
 
 /** `files` in portions a command line can hold. */
-function portions(files) {
-  const result = [[]];
+function portions(files: string[]): string[][] {
+  const result: string[][] = [[]];
   let bytes = 0;
   for (const file of files) {
     bytes += Buffer.byteLength(file) + 2;
-    if (bytes > MAX_ARGUMENT_BYTES && result.at(-1).length) {
+    if (bytes > MAX_ARGUMENT_BYTES && result.at(-1)!.length) {
       result.push([]);
       bytes = Buffer.byteLength(file) + 2;
     }
-    result.at(-1).push(file);
+    result.at(-1)!.push(file);
   }
   return result;
 }
 
 /** Markdownlint-cli2 over `files`. It exits 1 on findings and above that on a failure. */
-function runLint(files, { fix = false } = {}) {
+function runLint(files: string[], { fix = false } = {}): { found: boolean; output: string } {
   const env = fix ? { ...process.env, DOCS_LINT_FIX_PASS: "1" } : process.env;
   const results = portions(files).map((portion) =>
     // A leading colon makes the path literal: `app/(group)/x.md` and `!x.md` would otherwise be patterns,
@@ -111,13 +119,13 @@ function runLint(files, { fix = false } = {}) {
   };
 }
 
-function gitNames(command, ...args) {
+function gitNames(command: string, ...args: string[]): string[] {
   const done = spawnSync("git", [command, "-z", ...args], { encoding: "utf8", maxBuffer: Infinity });
   if (done.status !== 0) fail(`cannot read the staged files: ${done.stderr.trim()}`);
   return done.stdout.split("\0").filter(Boolean);
 }
 
-function isUtf8(file) {
+function isUtf8(file: string): boolean {
   try {
     new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(file));
     return true;
@@ -126,8 +134,8 @@ function isUtf8(file) {
   }
 }
 
-function parse(args) {
-  const options = { fix: false, staged: false, files: [] };
+function parse(args: string[]): { fix: boolean; staged: boolean; files: string[] } {
+  const options: { fix: boolean; staged: boolean; files: string[] } = { fix: false, staged: false, files: [] };
   for (const arg of args) {
     if (arg === "--fix") options.fix = true;
     else if (arg === "--staged") options.staged = true;
@@ -150,10 +158,10 @@ for (const config of [MARKDOWNLINT_CONFIG, SPELLING_CONFIG]) {
   if (!existsSync(config)) fail(`no ${config} here. Run from the repository root; the README shows the file.`);
 }
 
-const loaded = (await import(pathToFileURL(resolve(MARKDOWNLINT_CONFIG)).href)).default;
+const loaded = (await import(pathToFileURL(resolve(MARKDOWNLINT_CONFIG)).href) as { default: BaseOptions }).default;
 const ignored = ignoredBy(process.cwd(), loaded.ignores ?? []);
 const globs = (loaded.globs ?? ["**/*.md"]).map(globToRegExp);
-const isMarkdown = (file) => globs.some((glob) => glob.test(file.replace(/^\.\//, "")));
+const isMarkdown = (file: string): boolean => globs.some((glob) => glob.test(file.replace(/^\.\//, "")));
 
 const tree = listFiles(process.cwd(), { gitignore: loaded.gitignore !== false, ignored });
 
@@ -183,7 +191,7 @@ function stagedFiles() {
 }
 
 /** Tracked links, outside the staged files, into what this commit changes. Reports them; how many. */
-function reportLinksIntoStaged(staged) {
+function reportLinksIntoStaged(staged: string[]): number {
   // With renames off, a renamed file reads as its old path deleted, which is the path links still name.
   const deleted = gitNames("diff", "--cached", "--name-only", "--no-renames", "--diff-filter=D");
   const others = gitNames("ls-files").filter(
@@ -194,7 +202,7 @@ function reportLinksIntoStaged(staged) {
   return findings.length;
 }
 
-function warnOnPartialStaging(staged) {
+function warnOnPartialStaging(staged: string[]): void {
   const unstaged = new Set(gitNames("diff", "--name-only"));
   for (const file of staged.filter((name) => unstaged.has(name))) {
     console.error(`docs-lint: ${file} has unstaged changes; the working tree was checked, not what the commit holds`);
@@ -210,7 +218,7 @@ const dangling = options.staged ? reportLinksIntoStaged(files) : 0;
 if (options.staged) warnOnPartialStaging(files);
 if (!files.length) {
   if (!options.staged && !options.files.length) console.error("docs-lint: no markdown files here");
-  process.exit(dangling ? 1 : 0);
+  await finish(dangling ? 1 : 0);
 }
 
 const notUtf8 = files.filter((file) => !isUtf8(file));
@@ -237,7 +245,7 @@ if (options.fix) {
 
 const lint = runLint(files);
 process.stdout.write(lint.output);
-const countFindings = (matches) => lint.output.split("\n").filter((line) => / error /.test(line) && matches(line)).length;
+const countFindings = (matches: (line: string) => boolean): number => lint.output.split("\n").filter((line) => / error /.test(line) && matches(line)).length;
 const linkFindings = countFindings((line) => line.includes(` error ${LINKS_RULE}`));
 const lintFindings = countFindings((line) => !line.includes(` error ${LINKS_RULE}`));
 
@@ -254,10 +262,10 @@ const spelling = runTool("cspell", ["--no-progress", "--no-summary", "--no-must-
   stdio: ["pipe", "pipe", "inherit"],
 });
 process.stdout.write(spelling.stdout ?? "");
-if (spelling.status === null || (spelling.status !== 0 && !spelling.stdout)) process.exit(2);
+if (spelling.status === null || (spelling.status !== 0 && !spelling.stdout)) await finish(2);
 const spellingWarnings = (spelling.stdout ?? "").split("\n").filter(Boolean).length;
 
-console.error(
+console.log(
   `docs-lint: ${files.length} file(s): ${lintFindings} lint, ${linkFindings + dangling} links, ${wrapped.length} hard-wrapped, ${spellingWarnings} spelling warnings`,
 );
-process.exit(lint.found || wrapped.length || dangling ? 1 : 0);
+await finish(lint.found || wrapped.length || dangling ? 1 : 0);

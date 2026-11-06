@@ -25,7 +25,7 @@ const WS = String.raw`\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u202
 // A RegExp whose `\s` and `\S` mean the whitespace above, outside a character
 // class only. `s` lets `.` match a carriage return. `\d` stays ASCII: CommonMark
 // allows only ASCII digits in a list marker.
-const re = (source, flags = "") =>
+const re = (source: string, flags = ""): RegExp =>
   new RegExp(source.replaceAll(String.raw`\S`, `[^${WS}]`).replaceAll(String.raw`\s`, `[${WS}]`), flags + "s");
 
 const FENCE = re(String.raw`^(\s*)(\`{3,}|~{3,})(.*)$`);
@@ -52,7 +52,7 @@ const MATH = /^\$\$/;
 const TEMPLATE_TAG = /^(?:\{%.*%\}|\{\{.*\}\})$/;
 const DEFINITION = /^:\s/;
 const IMPORT = /^@\S+$/;
-const FRONTMATTER_CLOSERS = { "---": "---", "+++": "+++", "{": "}" };
+const FRONTMATTER_CLOSERS: Record<string, string> = { "---": "---", "+++": "+++", "{": "}" };
 // A file asks to be left as it is: a verbatim record, or text whose line breaks are its content.
 const OPT_OUT = /^[ \t]*<!--[ \t]*markdownlint-disable(?:[ \t]+hard-wrap)?[ \t]*-->[ \t]*$/m;
 const TABLE_DELIMITER = re(String.raw`^\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$`);
@@ -70,18 +70,18 @@ const HTML_TO_MARKER = [
 
 // By hand rather than by a pattern: `[ ]+$` retries from every space of a run, which is quadratic.
 const SPACE = new RegExp(`^[${WS}]$`);
-const rstrip = (s) => {
+const rstrip = (s: string): string => {
   let end = s.length;
   while (end > 0 && SPACE.test(s[end - 1])) end -= 1;
   return s.slice(0, end);
 };
-const strip = (s) => {
+const strip = (s: string): string => {
   const end = rstrip(s).length;
   let start = 0;
   while (start < end && SPACE.test(s[start])) start += 1;
   return s.slice(start, end);
 };
-const lstripSpaces = (s) => s.replace(/^ +/, "");
+const lstripSpaces = (s: string): string => s.replace(/^ +/, "");
 
 /**
  * True if the line opens a block that must not be folded into a paragraph.
@@ -90,7 +90,7 @@ const lstripSpaces = (s) => s.replace(/^ +/, "");
  * a list item is indented past the anchors these patterns use, and missing one
  * of those folds a code block into prose.
  */
-function blocky(line) {
+function blocky(line: string): boolean {
   const stripped = strip(line);
   if (!stripped) return true;
   return [
@@ -105,7 +105,7 @@ function blocky(line) {
  * A two-space hard break and a trailing backslash are both line breaks the
  * author asked for, so a join must not swallow them.
  */
-function stopsAfter(line) {
+function stopsAfter(line: string): boolean {
   return HARDBREAK.test(line) || BACKSLASH.test(line.replace(/\n+$/, ""));
 }
 
@@ -116,9 +116,9 @@ function stopsAfter(line) {
  * break: stripping it would turn the break into a join on the next run, so the
  * tool would not reach a fixed point in one pass.
  */
-function fold(parts) {
+function fold(parts: string[]): string {
   const joined = parts.map(strip).join(" ");
-  const last = parts[parts.length - 1];
+  const last = parts.at(-1)!;
   return stopsAfter(last) ? joined + last.slice(rstrip(last).length) : joined;
 }
 
@@ -129,7 +129,7 @@ function fold(parts) {
  * does not close it — but the bare ``` that ends that inner block does. Getting
  * this wrong truncates the outer block and folds its code into prose.
  */
-function closes(candidate, marker, width) {
+function closes(candidate: string, marker: string, width: number): boolean {
   const match = FENCE.exec(strip(candidate));
   return Boolean(
     match && match[2][0] === marker && match[2].length >= width && !strip(match[3]),
@@ -137,14 +137,14 @@ function closes(candidate, marker, width) {
 }
 
 /** True if `line` heads a table whose rows open with no pipe, as `next` shows by being its delimiter row. */
-const headsTable = (line, next = "") => line.includes("|") && TABLE_DELIMITER.test(next);
+const headsTable = (line: string, next = ""): boolean => line.includes("|") && TABLE_DELIMITER.test(next);
 
 /**
  * Return `text` with its hard-wrapped paragraphs folded onto one line. A byte-order mark and CRLF line
  * endings are taken off first and put back after, since either would hide the frontmatter or a hard
  * break from the patterns above. A file with nothing to fold comes back exactly as it was.
  */
-export function reflow(text) {
+export function reflow(text: string): string {
   const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
   const body = text.slice(bom.length).replaceAll("\r\n", "\n");
   if (OPT_OUT.test(body)) return text;
@@ -153,18 +153,18 @@ export function reflow(text) {
   return bom + (text.includes("\r\n") ? folded.replaceAll("\n", "\r\n") : folded);
 }
 
-function foldParagraphs(text) {
+function foldParagraphs(text: string): string {
   const lines = text.split("\n");
-  const out = [];
+  const out: string[] = [];
   let i = 0;
   const n = lines.length;
-  const copyWhile = (keeps) => {
+  const copyWhile = (keeps: (line: string) => unknown): void => {
     while (i < n && keeps(lines[i])) {
       out.push(lines[i]);
       i += 1;
     }
   };
-  const copyThrough = (isLast) => {
+  const copyThrough = (isLast: (line: string) => boolean): void => {
     while (i < n) {
       const done = isLast(lines[i]);
       out.push(lines[i]);
@@ -367,7 +367,7 @@ function foldParagraphs(text) {
  *
  * Covers `**`, `*`, `?`, `[...]`, `{a,b}` and a backslash escape.
  */
-export function globToRegExp(glob) {
+export function globToRegExp(glob: string): RegExp {
   let source = "";
   let depth = 0;
   for (let i = 0; i < glob.length; i += 1) {
@@ -420,17 +420,17 @@ export function globToRegExp(glob) {
  * path through a symlinked directory is outside `dir` as spelled, and a file
  * reached through a symlinked subdirectory is outside it once resolved.
  */
-export function ignoredBy(dir, ignores) {
+export function ignoredBy(dir: string, ignores: string[]): (name: string) => boolean {
   // Both spellings mean the same to markdownlint-cli2's globbing: `./gen/**`, and `gen/` for a directory.
   const patterns = ignores.map((glob) => globToRegExp(glob.replace(/^\.\//, "").replace(/\/$/, "/**")));
-  const real = (path) => {
+  const real = (path: string): string => {
     try {
       return realpathSync(path);
     } catch {
       return path;
     }
   };
-  const posix = (from, to) => relative(from, to).split(sep).join("/");
+  const posix = (from: string, to: string): string => relative(from, to).split(sep).join("/");
   return (name) => {
     const path = resolve(dir, name);
     const spellings = [posix(dir, path), posix(real(dir), real(path))];
@@ -439,7 +439,7 @@ export function ignoredBy(dir, ignores) {
 }
 
 /** The line of the first fold `text` needs, or nothing if it needs none. */
-export function firstWrappedLine(text) {
+export function firstWrappedLine(text: string): number | null {
   const before = text.split("\n");
   const after = reflow(text).split("\n");
   const at = before.findIndex((line, index) => line !== after[index]);
@@ -447,8 +447,8 @@ export function firstWrappedLine(text) {
 }
 
 /** Check or rewrite `paths`, skipping the ignored ones. Returns the files that differ. */
-export function reflowFiles(paths, { check, ignored }) {
-  const changed = [];
+export function reflowFiles(paths: string[], { check, ignored }: { check: boolean; ignored: (name: string) => boolean }): string[] {
+  const changed: string[] = [];
   for (const name of paths.filter((path) => !ignored(path))) {
     const source = readFileSync(name, "utf8");
     const folded = reflow(source);

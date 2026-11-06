@@ -27,9 +27,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
-import { withBase } from "../config/markdownlint.mjs";
-import { listFiles } from "../lib/files.mjs";
-import { firstWrappedLine, ignoredBy, reflow, reflowFiles } from "../lib/reflow.mjs";
+import { withBase } from "../src/config/markdownlint.ts";
+import { type IsIgnored, listFiles } from "../src/files.ts";
+import { firstWrappedLine, ignoredBy, reflow, reflowFiles } from "../src/reflow.ts";
 
 // A two-space hard break is a line break the author asked for, and it is the one
 // piece of this fixture that trailing-whitespace tooling would silently destroy.
@@ -37,7 +37,7 @@ import { firstWrappedLine, ignoredBy, reflow, reflowFiles } from "../lib/reflow.
 // trailing whitespace of its own.
 const SP = "<SP>";
 
-const text = (raw) => raw.replaceAll(SP, " ");
+const text = (raw: string) => raw.replaceAll(SP, " ");
 
 const HAZARDS = text(
   `> ### Backend never consumes the design. Never.
@@ -386,7 +386,7 @@ describe("frontmatter", () => {
 const WRAPPED = "Wrapped\nover two lines.\n";
 
 // Each test gets its own directory under the system temp dir, removed afterwards.
-function withTree(names, body) {
+function withTree(names: string[], body: (root: string) => void) {
   const root = mkdtempSync(join(tmpdir(), "reflow-test-"));
   try {
     for (const name of names) {
@@ -420,7 +420,7 @@ describe("reflowFiles", () => {
 // Run against the shipped list itself: its globs end in `/**`, which a glob
 // translator that does not know about the trailing form would get wrong.
 describe("ignores", () => {
-  const ignores = withBase({ ignores: [".claude/skills/**", ".github/**"] }).ignores;
+  const ignores = withBase({ ignores: [".claude/skills/**", ".github/**"] }).ignores!;
 
   test("an ignored file is skipped", () => {
     withTree([".claude/skills/x/SKILL.md"], (root) => {
@@ -473,7 +473,7 @@ describe("ignores", () => {
 
 describe("listFiles, outside a repository", () => {
   const none = () => false;
-  const walk = (root, ignored = none) => listFiles(root, { gitignore: false, ignored });
+  const walk = (root: string, ignored: IsIgnored = none) => listFiles(root, { gitignore: false, ignored });
 
   test("finds what is in a dot directory", () => {
     withTree([".hidden/a.md", "b.md"], (root) => {
@@ -548,7 +548,7 @@ describe("what a fold must not corrupt", () => {
     assert.equal(reflow("Before\nlines\na | b\n:--- | ---:\n1 | 2\n"), "Before lines\na | b\n:--- | ---:\n1 | 2\n");
   });
 
-  const unchanged = (name, text) => test(name, () => assert.equal(reflow(text), text));
+  const unchanged = (name: string, text: string) => test(name, () => assert.equal(reflow(text), text));
 
   unchanged("a fence opened on a list marker", "- ```js\n  a\n  b\n  ```\n");
   unchanged("a fence opened on a numbered marker", "1. ```\n   a\n   b\n   ```\n");

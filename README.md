@@ -23,7 +23,7 @@ export default withBase({
 });
 ```
 
-The package ships types, so an editor completes and describes every option of `withBase`, and `// @ts-check` underlines a mistake as you type. `node_modules/docs-lint/types/config/markdownlint.d.mts` is the reference for reading rather than completing. A name nothing reads is refused when the command runs, with exit 2 and the names it knows, so a typo cannot quietly leave a check without its setting.
+The package ships types, so an editor completes and describes every option of `withBase`, and `// @ts-check` underlines a mistake as you type. `node_modules/docs-lint/dist/config/markdownlint.d.ts` is the reference for reading rather than completing. A name nothing reads is refused when the command runs, with exit 2 and the names it knows, so a typo cannot quietly leave a check without its setting.
 
 `cspell.json`, whose `ignorePaths` only matter to an editor's spell checker, because the command reads `ignores`:
 

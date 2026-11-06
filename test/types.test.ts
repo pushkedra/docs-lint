@@ -12,9 +12,9 @@ import { fileURLToPath } from "node:url";
 const PACKAGE = resolve(fileURLToPath(import.meta.url), "../..");
 const TSC = join(PACKAGE, "node_modules/typescript/bin/tsc");
 
-let root;
+let root: string;
 
-const check = (options) => {
+const check = (options: string) => {
   writeFileSync(
     join(root, "config.mjs"),
     `// @ts-check\nimport { withBase } from "docs-lint/markdownlint";\nexport default withBase(${options});\n`,
@@ -28,8 +28,6 @@ const check = (options) => {
 };
 
 before(() => {
-  const build = spawnSync(process.execPath, [TSC, "--project", "tsconfig.types.json"], { cwd: PACKAGE, encoding: "utf8" });
-  assert.equal(build.status, 0, build.stdout);
   root = mkdtempSync(join(tmpdir(), "docs-lint-types-"));
   mkdirSync(join(root, "node_modules"));
   symlinkSync(PACKAGE, join(root, "node_modules/docs-lint"));
