@@ -28,8 +28,10 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 
 import { withBase } from "../src/config/markdownlint.ts";
+import { firstWrappedLine, reflowFiles } from "../src/checks/wrap.ts";
 import { type IsIgnored, listFiles } from "../src/files.ts";
-import { firstWrappedLine, ignoredBy, reflow, reflowFiles } from "../src/reflow.ts";
+import { ignoredBy } from "../src/globs.ts";
+import { reflow } from "../src/reflow/reflow.ts";
 
 // A two-space hard break is a line break the author asked for, and it is the one
 // piece of this fixture that trailing-whitespace tooling would silently destroy.
