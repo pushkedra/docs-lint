@@ -45,9 +45,11 @@
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --project tsconfig.json",
     "lint": "node dist/cli.js",
+    "lint:code": "eslint .",
     "pretest": "npm run build",
     "test": "npm run typecheck && node --test --test-reporter=dot \"test/*.test.ts\"",
     "check:package": "npm run build && publint --strict && attw --pack . --profile esm-only",
+    "prepare": "git config core.hooksPath .githooks || true",
     "prepack": "npm run build",
     "prepublishOnly": "npm test"
   },
@@ -58,8 +60,12 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "22.20.5",
+    "eslint": "10.14.0",
     "publint": "0.3.25",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
   }
 }

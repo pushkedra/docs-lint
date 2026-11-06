@@ -47,7 +47,8 @@ process.on("uncaughtException", (error) => fail(error.message));
 
 // Before anything below is loaded: on an older Node, a dependency's syntax error exits 1, and a tool's
 // complaint on stdout reads as spelling findings.
-const required = require("../package.json").engines.node.replace(/^>=/, "");
+const { engines } = require("../package.json") as { engines: { node: string } };
+const required = engines.node.replace(/^>=/, "");
 const atLeast = (have: string, need: string): boolean => {
   const [haveMajor = 0, haveMinor = 0] = have.split(".").map(Number);
   const [needMajor = 0, needMinor = 0] = need.split(".").map(Number);
@@ -70,7 +71,7 @@ function toolBin(name: string): string {
   for (;;) {
     const manifest = join(dir, "package.json");
     if (existsSync(manifest)) {
-      const { name: found, bin } = JSON.parse(readFileSync(manifest, "utf8"));
+      const { name: found, bin } = JSON.parse(readFileSync(manifest, "utf8")) as { name: string; bin: string | Record<string, string> };
       if (found === name) return resolve(dir, typeof bin === "string" ? bin : bin[name]);
     }
     dir = dirname(dir);
@@ -84,22 +85,26 @@ function runTool(name: string, args: string[], options: Partial<SpawnSyncOptions
     timeout: timeoutMs,
     ...options,
   });
-  if ((done.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") fail(`${name} did not finish in ${timeoutMs / 1000} s; DOCS_LINT_TIMEOUT sets the limit`);
+  if (done.error && "code" in done.error && done.error.code === "ETIMEDOUT") fail(`${name} did not finish in ${timeoutMs / 1000} s; DOCS_LINT_TIMEOUT sets the limit`);
   return done;
 }
 
 /** `files` in portions a command line can hold. */
 function portions(files: string[]): string[][] {
-  const result: string[][] = [[]];
+  const result: string[][] = [];
+  let portion: string[] = [];
   let bytes = 0;
   for (const file of files) {
-    bytes += Buffer.byteLength(file) + 2;
-    if (bytes > MAX_ARGUMENT_BYTES && result.at(-1)!.length) {
-      result.push([]);
-      bytes = Buffer.byteLength(file) + 2;
+    const size = Buffer.byteLength(file) + 2;
+    if (bytes + size > MAX_ARGUMENT_BYTES && portion.length) {
+      result.push(portion);
+      portion = [];
+      bytes = 0;
     }
-    result.at(-1)!.push(file);
+    portion.push(file);
+    bytes += size;
   }
+  result.push(portion);
   return result;
 }
 
@@ -112,7 +117,7 @@ function runLint(files: string[], { fix = false } = {}): { found: boolean; outpu
     runTool("markdownlint-cli2", ["--no-globs", ...portion.map((file) => `:${file}`), ...(fix ? ["--fix"] : [])], { env }),
   );
   const failed = results.find(({ status }) => status === null || status > 1);
-  if (failed) fail(`markdownlint-cli2 failed\n${failed.stdout ?? ""}${failed.stderr ?? ""}`);
+  if (failed) fail(`markdownlint-cli2 failed\n${failed.stdout}${failed.stderr}`);
   return {
     found: results.some(({ status }) => status === 1),
     output: results.map(({ stdout, stderr }) => stdout + stderr).join(""),
@@ -245,13 +250,13 @@ if (options.fix) {
 
 const lint = runLint(files);
 process.stdout.write(lint.output);
-const countFindings = (matches: (line: string) => boolean): number => lint.output.split("\n").filter((line) => / error /.test(line) && matches(line)).length;
+const countFindings = (matches: (line: string) => boolean): number => lint.output.split("\n").filter((line) => line.includes(" error ") && matches(line)).length;
 const linkFindings = countFindings((line) => line.includes(` error ${LINKS_RULE}`));
 const lintFindings = countFindings((line) => !line.includes(` error ${LINKS_RULE}`));
 
 const wrapped = reflowFiles(files, { check: true, ignored });
 for (const file of wrapped) {
-  console.log(`${file}:${firstWrappedLine(readFileSync(file, "utf8"))} hard-wrapped paragraph; docs-lint --fix unwraps it`);
+  console.log(`${file}:${firstWrappedLine(readFileSync(file, "utf8")) ?? 1} hard-wrapped paragraph; docs-lint --fix unwraps it`);
 }
 
 // Cspell exits 1 on findings and on a config it could not load alike. Only findings print to stdout,
@@ -261,9 +266,9 @@ const spelling = runTool("cspell", ["--no-progress", "--no-summary", "--no-must-
   input: files.join("\n"),
   stdio: ["pipe", "pipe", "inherit"],
 });
-process.stdout.write(spelling.stdout ?? "");
+process.stdout.write(spelling.stdout);
 if (spelling.status === null || (spelling.status !== 0 && !spelling.stdout)) await finish(2);
-const spellingWarnings = (spelling.stdout ?? "").split("\n").filter(Boolean).length;
+const spellingWarnings = spelling.stdout.split("\n").filter(Boolean).length;
 
 console.log(
   `docs-lint: ${files.length} file(s): ${lintFindings} lint, ${linkFindings + dangling} links, ${wrapped.length} hard-wrapped, ${spellingWarnings} spelling warnings`,

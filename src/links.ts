@@ -48,7 +48,7 @@ const DENIED_URLS = [/^http:\/\/(?!(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])
 const PLACEHOLDER = /[{<>]|%7[Bb]|%3[Cc]|%[A-Z_]+%/;
 // `<url>` is the placeholder form, where a real path has a dot or a slash: `<my file.md>`.
 const PATHLESS = /^[^./]*$/;
-const NAMED_REFERENCES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const NAMED_REFERENCES = new Map([["amp", "&"], ["lt", "<"], ["gt", ">"], ["quot", "\""], ["apos", "'"]]);
 const LINE_FRAGMENT = /^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$/;
 const MARKDOWN_FILE = /\.(?:md|markdown)$/i;
 const HTML_LINK = /\s(?:href|src)\s*=\s*["']([^"']+)["']/gi;
@@ -86,9 +86,9 @@ const decode = (text: string): string => {
 const posix = (path: string): string => path.split(sep).join("/").normalize("NFC");
 
 const referenceValue = (text: string): string => {
-  const [, hex, decimal, name] = /^&(?:#[xX]([\da-fA-F]+)|#(\d+)|(\w+));$/.exec(text) ?? [];
+  const [, hex = "", decimal = "", name = ""] = /^&(?:#[xX]([\da-fA-F]+)|#(\d+)|(\w+));$/.exec(text) ?? [];
   if (hex || decimal) return String.fromCodePoint(hex ? Number.parseInt(hex, 16) : Number(decimal));
-  return (name && NAMED_REFERENCES[name]) ?? text;
+  return NAMED_REFERENCES.get(name) ?? text;
 };
 
 /** A destination as it means, with its backslash escapes and character references resolved. */
@@ -112,7 +112,7 @@ function linksIn(tokens: MicromarkToken[]): Link[] {
     } else if (type === "autolinkProtocol") {
       links.push({ lineNumber, destination: text });
     } else if (type === "htmlText" && !text.startsWith("<!--")) {
-      for (const [, destination] of text.matchAll(HTML_LINK)) links.push({ lineNumber, destination: destination! });
+      for (const [, destination] of text.matchAll(HTML_LINK)) links.push({ lineNumber, destination: destination });
     }
   });
   return links;
@@ -141,10 +141,10 @@ function anchorsIn(tokens: MicromarkToken[]): Set<string> {
       const count = counts.get(name) ?? 0;
       counts.set(name, count + 1);
       anchors.add(count ? `${name}-${count}` : name);
-      for (const [, anchor] of token.text.matchAll(HEADING_ANCHOR)) anchors.add(anchor!);
+      for (const [, anchor] of token.text.matchAll(HEADING_ANCHOR)) anchors.add(anchor);
     } else if (token.type === "htmlText" && !token.text.startsWith("<!--") && !token.text.startsWith("</")) {
       const match = HTML_ID.exec(token.text) ?? HTML_NAME.exec(token.text);
-      if (match) anchors.add(match[1]!);
+      if (match) anchors.add(match[1]);
     }
   });
   return anchors;
@@ -160,12 +160,12 @@ const anchorsOf = (path: string): Set<string> =>
       tags: ["links"],
       parser: "micromark",
       function: ({ parsers }) => {
-        anchors = anchorsIn(parsers.micromark!.tokens);
+        anchors = anchorsIn(parsers.micromark.tokens);
       },
     };
     lint({
       strings: { [path]: readFileSync(path, "utf8") },
-      config: { default: false, "docs-lint-anchors": true },
+      config: { "default": false, "docs-lint-anchors": true },
       customRules: [capture],
     });
     return anchors;
@@ -185,7 +185,7 @@ function rootOf(path: string): string | null {
 const gitFiles = (root: string, ...args: string[]): Set<string> => {
   const done = spawnSync("git", ["-C", root, "ls-files", "-z", ...args], { encoding: "utf8", maxBuffer: Infinity });
   // Without this answer the tracked-file checks cannot run, which must not read as a clean file.
-  if (done.status !== 0) throw new Error(`git cannot list ${root}: ${done.stderr?.trim() || done.error?.message}`);
+  if (done.status !== 0) throw new Error(`git cannot list ${root}: ${done.error?.message ?? done.stderr.trim()}`);
   return new Set(done.stdout.split("\0").filter(Boolean).map((name) => name.normalize("NFC")));
 };
 
@@ -243,7 +243,7 @@ function checkExternal(destination: string, denied: RegExp[]): string | null {
   if (IMAGE_DATA.test(destination)) return null;
   if (!ALLOWED_PROTOCOLS.has(url.protocol)) return `the protocol ${url.protocol} is not allowed`;
   const pattern = denied.find((re) => re.test(destination));
-  return pattern ? `denied by ${pattern}` : null;
+  return pattern ? `denied by ${String(pattern)}` : null;
 }
 
 const within = (dir: string, path: string): boolean => {
@@ -253,8 +253,8 @@ const within = (dir: string, path: string): boolean => {
 
 /** Why a link to a local path does not hold, with the repository path it aims at. */
 function checkLocal(destination: string, source: string, root: string | null, allowedRoots: string[]): Finding | null {
-  const [, rawPath, fragment] = /^([^?#]*)(?:\?[^#]*)?(?:#(.*))?$/s.exec(destination)!;
-  const path = decode(rawPath!);
+  const [, rawPath = "", fragment = ""] = /^([^?#]*)(?:\?[^#]*)?(?:#(.*))?$/s.exec(destination) ?? [];
+  const path = decode(rawPath);
   if (!path) return null;
   const home = root ?? process.cwd();
   // GitHub reads a leading slash as the repository's root, so it is not a path on the disk.
@@ -262,7 +262,7 @@ function checkLocal(destination: string, source: string, root: string | null, al
   const name = posix(relative(home, target));
   const inside = within(home, target);
   const listing = root && gitListing(root);
-  const fromTracked = listing && listing.tracked.has(posix(relative(root!, source)));
+  const fromTracked = listing && listing.tracked.has(posix(relative(root, source)));
 
   // A sibling this repository is kept beside: the link leaves it on purpose, and still has to resolve.
   const sibling = allowedRoots.map((allowed) => resolve(home, allowed)).find((allowed) => within(allowed, target));
@@ -273,7 +273,7 @@ function checkLocal(destination: string, source: string, root: string | null, al
     return { detail: "gitignored, so a clone does not have it", target: name };
   }
 
-  const anchor = decode(fragment ?? "");
+  const anchor = decode(fragment);
   if (anchor && !LINE_FRAGMENT.test(anchor) && MARKDOWN_FILE.test(path) && statSync(target).isFile()) {
     if (!anchorsOf(target).has(anchor)) return { detail: `no heading for #${anchor}`, target: name };
   }
@@ -297,7 +297,7 @@ export const linksRule: Rule = {
     const excluded = toRegExps(config.excludedUrls);
     const denied = [...DENIED_URLS, ...toRegExps(config.deniedUrls)];
 
-    for (const { lineNumber, destination } of linksIn(parsers.micromark!.tokens)) {
+    for (const { lineNumber, destination } of linksIn(parsers.micromark.tokens)) {
       if (!destination || destination.startsWith("#") || PLACEHOLDER.test(destination)) continue;
       if (excluded.some((re) => re.test(destination))) continue;
       const external = SCHEME.test(destination) || destination.startsWith("//");
@@ -305,7 +305,8 @@ export const linksRule: Rule = {
         ? { detail: checkExternal(destination.startsWith("//") ? `https:${destination}` : destination, denied) ?? "" }
         : checkLocal(destination, source, root, config.allowedRoots ?? []);
       if (!finding?.detail) continue;
-      if (config.into && !config.into.some((path) => path === finding.target || path.startsWith(`${finding.target}/`))) continue;
+      const { target } = finding;
+      if (config.into && !(target && config.into.some((path) => path === target || path.startsWith(`${target}/`)))) continue;
       onError({ lineNumber, detail: finding.detail, context: destination });
     }
   },
@@ -323,6 +324,6 @@ export function linksInto(files: string[], into: string[], config: RuleConfig | 
     customRules: [linksRule],
   });
   return Object.entries(results).flatMap(([file, errors]) =>
-    errors.map(({ lineNumber, errorDetail, errorContext }) => `${file}:${lineNumber} ${LINKS_RULE} ${errorDetail} [Context: "${errorContext}"]`),
+    errors.map(({ lineNumber, errorDetail, errorContext }) => `${file}:${lineNumber} ${LINKS_RULE} ${errorDetail ?? ""} [Context: "${errorContext ?? ""}"]`),
   );
 }

@@ -118,7 +118,7 @@ function stopsAfter(line: string): boolean {
  */
 function fold(parts: string[]): string {
   const joined = parts.map(strip).join(" ");
-  const last = parts.at(-1)!;
+  const last = parts[parts.length - 1] ?? "";
   return stopsAfter(last) ? joined + last.slice(rstrip(last).length) : joined;
 }
 
@@ -131,9 +131,7 @@ function fold(parts: string[]): string {
  */
 function closes(candidate: string, marker: string, width: number): boolean {
   const match = FENCE.exec(strip(candidate));
-  return Boolean(
-    match && match[2][0] === marker && match[2].length >= width && !strip(match[3]),
-  );
+  return Boolean(match?.[2].startsWith(marker) && match[2].length >= width && !strip(match[3]));
 }
 
 /** True if `line` heads a table whose rows open with no pipe, as `next` shows by being its delimiter row. */
@@ -389,7 +387,7 @@ export function globToRegExp(glob: string): RegExp {
       while (glob[i + 1] === "*") i += 1;
     } else if (c === "?") {
       source += "[^/]";
-    } else if (c === "[" && glob.indexOf("]", i + 2) !== -1) {
+    } else if (c === "[" && glob.includes("]", i + 2)) {
       const end = glob.indexOf("]", i + 2);
       const body = glob.slice(i + 1, end).replace(/^!/, "^").replaceAll("\\", "\\\\");
       source += `[${body}]`;

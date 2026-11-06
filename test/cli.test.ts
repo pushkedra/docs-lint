@@ -14,7 +14,9 @@ const BIN = join(PACKAGE, "dist/cli.js");
 
 let root: string;
 
-const write = (name: string, text: string) => writeFileSync(join(root, name), text, "utf8");
+const write = (name: string, text: string) => {
+  writeFileSync(join(root, name), text, "utf8");
+};
 const docsLint = (...args: string[]) => {
   const done = spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
   return { status: done.status, output: done.stdout + done.stderr };
@@ -36,13 +38,15 @@ beforeEach(() => {
   symlinkSync(PACKAGE, join(root, "node_modules/docs-lint"));
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ ignores: ["generated/**"] });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ ignores: [\"generated/**\"] });\n",
   );
   write("cspell.json", cspell());
   write("project-words.txt", "");
 });
 
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true });
+});
 
 test("a clean tree exits 0", () => {
   write("a.md", "# Title\n\nA clean paragraph.\n");
@@ -275,7 +279,7 @@ test("a gitignored file is left out, and gitignore: false brings it back", () =>
   assert.equal(docsLint("local/a.md").status, 1);
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ gitignore: false });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ gitignore: false });\n",
   );
   const { status, output } = docsLint();
   assert.equal(status, 1);
@@ -288,7 +292,7 @@ test("a repository's globs narrow all three checks", () => {
   write("b.md", "no heading\nand a wrap wrod\n");
   write(
     ".markdownlint-cli2.mjs",
-    'import { withBase } from "docs-lint/markdownlint";\nexport default withBase({ globs: ["docs/**/*.md"] });\n',
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ globs: [\"docs/**/*.md\"] });\n",
   );
   const { status, output } = docsLint();
   assert.equal(status, 0, output);
@@ -333,7 +337,7 @@ test("the last line totals each check, and spelling is only a warning there", ()
   write("a.md", "# Title\n\n[dead](missing.md) and a wrod\nwrapped.\n\n\nMore.\n");
   const { status, output } = docsLint();
   assert.equal(status, 1);
-  assert.match(output.trim().split("\n").at(-1)!, /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
+  assert.match(output.trim().split("\n").at(-1) ?? "", /1 file\(s\): 1 lint, 1 links, 1 hard-wrapped, 1 spelling warnings/);
 });
 
 test("a staged symlink and a file staged then removed are skipped", () => {
@@ -353,7 +357,7 @@ test("output larger than a pipe's buffer arrives whole, with the totals last", (
   const done = spawnSync(process.execPath, [BIN, "a.md"], { cwd: root, encoding: "utf8", maxBuffer: Infinity });
   assert.equal(done.status, 1);
   assert.equal(done.stdout.split("\n").filter((line) => line.includes("error docs-lint-links")).length, 5000);
-  assert.match(done.stdout.trim().split("\n").at(-1)!, /5000 links, 0 hard-wrapped/);
+  assert.match(done.stdout.trim().split("\n").at(-1) ?? "", /5000 links, 0 hard-wrapped/);
 });
 
 test("a config that is absent exits 2 and says so", () => {
