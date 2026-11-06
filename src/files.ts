@@ -46,7 +46,7 @@ export function listFiles(dir: string, { gitignore, ignored }: { gitignore: bool
   if (done.status === 0) {
     return done.stdout.split("\0").filter((name) => name && !ignored(name) && isRegularFile(join(dir, name)));
   }
-  if (existsSync(join(dir, ".git"))) throw new Error(`git cannot list this repository: ${done.stderr?.trim()}`);
+  if (existsSync(join(dir, ".git"))) throw new Error(`git cannot list this repository: ${done.error?.message ?? done.stderr.trim()}`);
   return walk(dir, ignored);
 }
 

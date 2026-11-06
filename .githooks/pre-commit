@@ -1,0 +1,6 @@
+#!/bin/sh
+# The quick checks. The tests take minutes, so they run in CI.
+set -e
+npm run --silent typecheck
+npm run --silent lint:code
+node dist/cli.js --staged
