@@ -26,7 +26,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       # Source maps make the CLI runs the tests spawn from dist/ count toward src/. The published build carries none.
-      - run: npx tsc --project tsconfig.build.json --sourceMap
+      - run: npm run build -- --sourceMap
       - run: node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=lcov.info "test/*.test.ts"
         env:
           NODE_OPTIONS: --enable-source-maps
