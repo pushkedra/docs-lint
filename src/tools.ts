@@ -29,13 +29,17 @@ function toolBin(name: string): string {
   }
 }
 
-export function runTool(
+type RunOptions = Partial<SpawnSyncOptionsWithStringEncoding>;
+
+/** `script` under this Node, in a process of its own, reported as `name` if it runs out of time. */
+export function runScript(
   name: string,
+  script: string,
   args: string[],
-  options: Partial<SpawnSyncOptionsWithStringEncoding> = {},
+  options: RunOptions = {},
 ): SpawnSyncReturns<string> {
   const timeoutMs = 1000 * (Number(process.env.DOCS_LINT_TIMEOUT) || DEFAULT_TIMEOUT_SECONDS);
-  const done = spawnSync(process.execPath, [toolBin(name), ...args], {
+  const done = spawnSync(process.execPath, [script, ...args], {
     encoding: "utf8",
     maxBuffer: Infinity,
     timeout: timeoutMs,
@@ -45,4 +49,8 @@ export function runTool(
     fail(`${name} did not finish in ${timeoutMs / 1000} s; DOCS_LINT_TIMEOUT sets the limit`);
   }
   return done;
+}
+
+export function runTool(name: string, args: string[], options: RunOptions = {}): SpawnSyncReturns<string> {
+  return runScript(name, toolBin(name), args, options);
 }

@@ -21,7 +21,9 @@ const docsLint = (...args: string[]) => {
   const done = spawnSync(process.execPath, [BIN, ...args], { cwd: root, encoding: "utf8" });
   return { status: done.status, output: done.stdout + done.stderr };
 };
-const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+// No limit on the output: with thousands of files, git's warnings about line endings on Windows would
+// pass the default and kill it partway through.
+const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: Infinity });
 
 const cspell = (extra = {}) =>
   JSON.stringify({
@@ -424,10 +426,13 @@ test("a tool that does not finish in time exits 2 and says so", () => {
 
 test("many staged files with long names do not overflow a command line", () => {
   git("init", "-q");
+  // Past 260 characters, git on Windows refuses a path unless told otherwise, and nothing would be staged.
+  git("config", "core.longpaths", "true");
   const dir = "d".repeat(120);
   mkdirSync(join(root, dir));
   for (let i = 0; i < 8000; i += 1) writeFileSync(join(root, dir, `${"f".repeat(100)}${i}.md`), "# T\n\nBody.\n");
-  git("add", "-A");
+  const added = git("add", "-A");
+  assert.equal(added.status, 0, added.error?.message ?? added.stderr.slice(0, 500));
   const { status, output } = docsLint("--staged");
   assert.equal(status, 0, output);
   assert.match(output, /8000 file\(s\)/);
