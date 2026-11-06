@@ -4,7 +4,8 @@ const ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 const IMAGE_DATA = /^data:image\//i;
 
 // Plain HTTP, but not to this machine: a README's development server has no HTTPS to link to.
-export const DENIED_URLS = [/^http:\/\/(?!(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?:[:/?#]|$))/i];
+// `*.localhost` is this machine too, and it is how a server with several apps tells them apart.
+export const DENIED_URLS = [/^http:\/\/(?!(?:(?:[a-z\d.-]*\.)?localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?:[:/?#]|$))/i];
 
 /** What is wrong with an external link, or nothing. */
 export function checkExternal(destination: string, denied: RegExp[]): string | null {

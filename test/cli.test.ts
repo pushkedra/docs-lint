@@ -121,8 +121,21 @@ test("a repository's exclusion reaches all three checks, in a full run and for a
   for (const args of [[], ["generated/a.md", "b.md"]]) {
     const { status, output } = docsLint(...args);
     assert.equal(status, 0, output);
-    assert.doesNotMatch(output, /wrod|MD0|generated\/a\.md/);
+    assert.doesNotMatch(output, /wrod|MD0/);
   }
+});
+
+test("a named file left out by the config or being a symlink says so, and exits 0", () => {
+  mkdirSync(join(root, "generated"));
+  write("generated/a.md", "no heading\n");
+  write("b.md", "# Title\n\nA clean paragraph.\n");
+  symlinkSync("b.md", join(root, "link.md"));
+  const excluded = docsLint("generated/a.md");
+  assert.equal(excluded.status, 0, excluded.output);
+  assert.match(excluded.output, /skipped generated\/a\.md: the config excludes it/);
+  const link = docsLint("link.md");
+  assert.equal(link.status, 0, link.output);
+  assert.match(link.output, /skipped link\.md: a symlink is not read/);
 });
 
 test("a base exclusion holds from node_modules", () => {
@@ -158,6 +171,29 @@ test("a config that cannot load exits 2 rather than reading as findings", () => 
   write("a.md", "# Title\n\nA clean paragraph.\n");
   write(".markdownlint-cli2.mjs", "export default {{{\n");
   assert.equal(docsLint("a.md").status, 2);
+});
+
+test("a config that skips withBase exits 2, because the checks would be off", () => {
+  write("a.md", "# Title\n\n[broken](missing.md)\n");
+  for (const config of ["export default {};\n", "export default { config: { default: true } };\n", "export const x = 1;\n"]) {
+    write(".markdownlint-cli2.mjs", config);
+    const { status, output } = docsLint();
+    assert.equal(status, 2, output);
+    assert.match(output, /withBase/);
+  }
+});
+
+test("a rule that throws exits 2 rather than reading as a finding", () => {
+  write("a.md", "# Title\n\nA clean paragraph.\n");
+  write(
+    ".markdownlint-cli2.mjs",
+    "import { withBase } from \"docs-lint/markdownlint\";\n"
+    + "export default withBase({ customRules: [{ names: [\"boom\"], description: \"x\", tags: [\"x\"], parser: \"none\", "
+    + "function: () => { throw new Error(\"boom\"); } }] });\n",
+  );
+  const { status, output } = docsLint();
+  assert.equal(status, 2, output);
+  assert.match(output, /threw an exception: boom/);
 });
 
 test("--staged from below the repository's root exits 2 and says so", () => {
@@ -224,6 +260,15 @@ test("--fix leaves alone what only an author can decide, and the check still rep
   assert.equal(status, 1, output);
   assert.equal(readFileSync(join(root, "a.md"), "utf8"), text);
   assert.match(output, /MD029|MD053/);
+});
+
+test("--fix keeps a command's prompt, a line that only looks like a heading and a fragment's case", () => {
+  const text = "# Title\n\n## isMatch\n\n#89 was fixed\n\n#90 too#\n\n```sh\n$ npm install x\n```\n\n[a](#isMatch)\n";
+  write("a.md", text);
+  const { status, output } = docsLint("--fix");
+  assert.equal(status, 1, output);
+  assert.equal(readFileSync(join(root, "a.md"), "utf8"), text);
+  for (const rule of [/MD014/, /MD018/, /MD020/, /MD051/]) assert.match(output, rule);
 });
 
 test("--fix keeps a tab in code and reaches a fixed point in one run", () => {
@@ -297,6 +342,22 @@ test("a repository's globs narrow all three checks", () => {
   const { status, output } = docsLint();
   assert.equal(status, 0, output);
   assert.doesNotMatch(output, /wrod/);
+});
+
+test("a negated glob excludes a file from all three checks and from --fix", () => {
+  mkdirSync(join(root, "sk"));
+  const wrapped = "no heading\nand a wrap wrod\n";
+  write("sk/s.md", wrapped);
+  write("b.md", "# Title\n\nA clean paragraph.\n");
+  write(
+    ".markdownlint-cli2.mjs",
+    "import { withBase } from \"docs-lint/markdownlint\";\nexport default withBase({ globs: [\"**/*.md\", \"!sk/**\"] });\n",
+  );
+  const { status, output } = docsLint("--fix");
+  assert.equal(status, 0, output);
+  assert.equal(readFileSync(join(root, "sk/s.md"), "utf8"), wrapped);
+  assert.doesNotMatch(output, /wrod|MD0/);
+  assert.match(output, /1 file\(s\)/);
 });
 
 test("a tool that does not finish in time exits 2 and says so", () => {
