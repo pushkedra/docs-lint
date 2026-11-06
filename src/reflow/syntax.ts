@@ -86,7 +86,7 @@ export function blocky(line: string): boolean {
  * author asked for, so a join must not swallow them.
  */
 export function stopsAfter(line: string): boolean {
-  return HARDBREAK.test(line) || BACKSLASH.test(line.replace(/\n+$/, ""));
+  return HARDBREAK.test(line) || BACKSLASH.test(line);
 }
 
 /**
