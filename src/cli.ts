@@ -36,6 +36,12 @@ function fail(message: string): never {
   process.exit(2);
 }
 
+/** Exit once stdout has drained: `process.exit` drops whatever a pipe has not taken yet. */
+async function finish(code: number): Promise<never> {
+  await new Promise((drained) => process.stdout.write("", drained));
+  process.exit(code);
+}
+
 // Node exits 1 on an uncaught error, which a hook would read as findings.
 process.on("uncaughtException", (error) => fail(error.message));
 
@@ -212,7 +218,7 @@ const dangling = options.staged ? reportLinksIntoStaged(files) : 0;
 if (options.staged) warnOnPartialStaging(files);
 if (!files.length) {
   if (!options.staged && !options.files.length) console.error("docs-lint: no markdown files here");
-  process.exit(dangling ? 1 : 0);
+  await finish(dangling ? 1 : 0);
 }
 
 const notUtf8 = files.filter((file) => !isUtf8(file));
@@ -256,10 +262,10 @@ const spelling = runTool("cspell", ["--no-progress", "--no-summary", "--no-must-
   stdio: ["pipe", "pipe", "inherit"],
 });
 process.stdout.write(spelling.stdout ?? "");
-if (spelling.status === null || (spelling.status !== 0 && !spelling.stdout)) process.exit(2);
+if (spelling.status === null || (spelling.status !== 0 && !spelling.stdout)) await finish(2);
 const spellingWarnings = (spelling.stdout ?? "").split("\n").filter(Boolean).length;
 
-console.error(
+console.log(
   `docs-lint: ${files.length} file(s): ${lintFindings} lint, ${linkFindings + dangling} links, ${wrapped.length} hard-wrapped, ${spellingWarnings} spelling warnings`,
 );
-process.exit(lint.found || wrapped.length || dangling ? 1 : 0);
+await finish(lint.found || wrapped.length || dangling ? 1 : 0);

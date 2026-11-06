@@ -348,6 +348,14 @@ test("a staged symlink and a file staged then removed are skipped", () => {
   assert.equal(status, 0, output);
 });
 
+test("output larger than a pipe's buffer arrives whole, with the totals last", () => {
+  write("a.md", `# Title\n\n${"[dead](missing.md)\n\n".repeat(5000)}`);
+  const done = spawnSync(process.execPath, [BIN, "a.md"], { cwd: root, encoding: "utf8", maxBuffer: Infinity });
+  assert.equal(done.status, 1);
+  assert.equal(done.stdout.split("\n").filter((line) => line.includes("error docs-lint-links")).length, 5000);
+  assert.match(done.stdout.trim().split("\n").at(-1)!, /5000 links, 0 hard-wrapped/);
+});
+
 test("a config that is absent exits 2 and says so", () => {
   rmSync(join(root, "cspell.json"));
   const { status, output } = docsLint();
