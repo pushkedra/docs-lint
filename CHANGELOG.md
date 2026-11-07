@@ -4,9 +4,15 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- A British form is refused in any case, so `Centre` at the start of a sentence and `CENTRE` are caught as `centre` is, and the suggestion keeps the case. This can add spelling warnings, which never fail a run, and a repository still allows a word through `ignoreWords`.
+
 ### Added
 
 - `docs-lint migrate` prints a `.markdownlint-cli2.mjs` holding what the markdownlint config at the root sets beyond the base, and `--write` creates that file and removes the old config. It reads JSON, JSONC and YAML, and refuses a config that is code.
+- About a hundred technical terms no dictionary knows, in named groups a repository can turn off one by one: git and the shell, the browser, code quality, AI and others. The Ruby and frontend groups are off and hold only what cspell's own dictionaries for those stacks lack, to be turned on together with them.
+- The American-spelling list refuses 17 more British forms, among them `normalised`, `neighbour` and `recognised`, each with its suggestion.
 
 ### Fixed
 

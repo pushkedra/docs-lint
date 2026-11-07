@@ -4,8 +4,19 @@
 {
   "version": "0.2",
 
+  // british-spelling.json holds the British spellings refused, each inflection on its own line, with
+  // the American form after the colon as the suggestion. `flagWords` rather than a dictionary because a dictionary's `!word`
+  // matches one exact case, so `Centre` at the start of a sentence would get past it. Only clean pairs
+  // belong there — one meaning, two spellings. A homograph (cheque/check, storey/story, programme/program,
+  // metre/meter) is never added: a word list cannot tell which meaning a sentence uses.
+  //
+  // common-words.json holds the terms no dictionary knows, in named groups. A repository turns a group off with
+  // `"dictionaries": ["!docs-lint-ruby"]`. The stack groups are off here and hold only what cspell's own
+  // dictionary for that stack lacks, so a repository turns a stack on as a pair: `["ruby", "docs-lint-ruby"]`.
+  "import": ["./british-spelling.json", "./common-words.json"],
+
   // American spelling. en-US alone accepts many British forms as variants of its own words
-  // (honour, centre, artefact, grey), so american-spelling.txt forbids them, each inflection
+  // (honour, centre, artefact, grey), so british-spelling.json forbids them, each inflection
   // spelled out, with the American form as the suggestion.
   "language": "en-US",
 
@@ -23,12 +34,6 @@
     ".idea/**",
     ".vscode/**"
   ],
-
-  "dictionaryDefinitions": [
-    { "name": "american-spelling", "path": "../dict/american-spelling.txt" },
-    { "name": "common-words", "path": "../dict/common-words.txt" }
-  ],
-  "dictionaries": ["american-spelling", "common-words"],
 
   // A code span or a fenced block holds identifiers, paths and commands, which are respelled by
   // nobody; Cyrillic is another language's text, not an English misspelling. A code span closes on

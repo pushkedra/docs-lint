@@ -92,6 +92,29 @@ test("a British form is forbidden, and a repository can allow one word of them",
   assert.match(output, /Forbidden word \(honour\)/);
 });
 
+test("a British form is forbidden in any case, the fix keeps the case, and a repository's allowance covers them all", () => {
+  write("a.md", "# Title\n\nCentre, centre and CENTRE.\n");
+  const { status, output } = docsLint();
+  assert.equal(status, 0, output);
+  for (const [word, fix] of [["Centre", "Center"], ["centre", "center"], ["CENTRE", "CENTER"]]) {
+    assert.ok(output.includes(`Forbidden word (${word}) fix: (${fix})`), output);
+  }
+  write("cspell.json", cspell({ ignoreWords: ["centre"] }));
+  assert.doesNotMatch(docsLint().output, /centre/i);
+});
+
+test("the package's term groups apply, a stack group waits for its pair, and a repository can turn a group off", () => {
+  write("a.md", "# Title\n\nThe frontmatter and the worktrees; searchkick runs in sidekiq.\n");
+  const off = docsLint().output;
+  assert.doesNotMatch(off, /frontmatter|worktrees/);
+  assert.match(off, /Unknown word \(searchkick\)/);
+  assert.match(off, /Unknown word \(sidekiq\)/);
+  write("cspell.json", cspell({ dictionaries: ["project-words", "ruby", "docs-lint-ruby"] }));
+  assert.doesNotMatch(docsLint().output, /searchkick|sidekiq/);
+  write("cspell.json", cspell({ dictionaries: ["project-words", "!docs-lint-git-shell"] }));
+  assert.match(docsLint().output, /Unknown word \(worktrees\)/);
+});
+
 test("the shared word list and the repository's word list both apply", () => {
   write("project-words.txt", "zorblax\n");
   write("a.md", "# Title\n\nThe frontmatter of zorblax.\n");
