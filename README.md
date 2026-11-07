@@ -117,6 +117,8 @@ The package holds what is true of any repository: the rules, the British forms A
 - an exclusion goes into `ignores`, and into `ignorePaths` too if an editor's spell checker should honor it;
 - a link's exclusion goes into `docs-lint-links`;
 - a term goes into `project-words.txt`;
+- a stack's terms come from cspell's dictionary for it and the package's group beside it, turned on together in `cspell.json`: `"dictionaries": ["ruby", "docs-lint-ruby"]`, and `docs-lint-frontend` beside `node`, `typescript`, `fullstack` or `css`;
+- a group of the package's terms this repository does not want is turned off the same way: `"dictionaries": ["!docs-lint-products"]`;
 - a word this package forbids that is correct here, such as `licence` as a product's term, goes into `ignoreWords` in `cspell.json`.
 
 ## Updating

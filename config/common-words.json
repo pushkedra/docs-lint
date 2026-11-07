@@ -1,0 +1,206 @@
+{
+  "version": "0.2",
+  "dictionaryDefinitions": [
+    {
+      "name": "docs-lint-docs",
+      "description": "Markdown and documentation",
+      "words": [
+        "frontmatter",
+        "wikilink",
+        "wikilinks"
+      ]
+    },
+    {
+      "name": "docs-lint-git-shell",
+      "description": "git, the shell and the build tools around them",
+      "words": [
+        "autotools",
+        "extglobs",
+        "lockfiles",
+        "pathspec",
+        "reflog",
+        "reflogs",
+        "refspec",
+        "subshell",
+        "worktrees"
+      ]
+    },
+    {
+      "name": "docs-lint-data-infra",
+      "description": "Databases, networks and the services they run on",
+      "words": [
+        "cqlsh",
+        "cqlsh's",
+        "hostnames",
+        "libpq",
+        "tablespace",
+        "userinfo",
+        "xlog"
+      ]
+    },
+    {
+      "name": "docs-lint-browser",
+      "description": "The web platform: elements, events, rendering and caching",
+      "words": [
+        "accname",
+        "datepicker",
+        "fieldsets",
+        "flexbox",
+        "hrefs",
+        "keydowns",
+        "macrotask",
+        "microtask",
+        "microtasks",
+        "precached",
+        "precaches",
+        "precaching",
+        "refetched",
+        "refetches",
+        "spinbuttons",
+        "textareas",
+        "viewports",
+        "worklet"
+      ]
+    },
+    {
+      "name": "docs-lint-code",
+      "description": "Code, builds and tests in any language",
+      "words": [
+        "codegen",
+        "codemod",
+        "codemods",
+        "docstrings",
+        "npmjs",
+        "sourcemapped",
+        "stdlib",
+        "subtests",
+        "transpiles",
+        "typechecks",
+        "unminified"
+      ]
+    },
+    {
+      "name": "docs-lint-process",
+      "description": "How work is planned, shipped and handed over",
+      "words": [
+        "creds",
+        "cutover",
+        "dedup",
+        "descoped",
+        "drilldown",
+        "preflighted",
+        "preflights",
+        "prefs",
+        "presign",
+        "presigning",
+        "subfolders",
+        "subpaths",
+        "waitlist"
+      ]
+    },
+    {
+      "name": "docs-lint-ai",
+      "description": "AI models and agents, such as a Claude session's effort level",
+      "words": [
+        "hitl",
+        "multiagent",
+        "xhigh"
+      ]
+    },
+    {
+      "name": "docs-lint-code-quality",
+      "description": "Linters, static analysis and their metrics",
+      "words": [
+        "clippy",
+        "detekt",
+        "golint",
+        "ktlint",
+        "mypy",
+        "ncloc",
+        "pylint",
+        "qube",
+        "scalastyle",
+        "scoverage",
+        "sonarqube",
+        "sqale"
+      ]
+    },
+    {
+      "name": "docs-lint-products",
+      "description": "Services, products, libraries and fonts named in prose",
+      "words": [
+        "elementor",
+        "exceljs",
+        "flywire",
+        "getpass",
+        "glitchtip",
+        "lexend",
+        "noto",
+        "openpyxl",
+        "quicktime",
+        "rovo",
+        "sendgrid",
+        "transferwise",
+        "wayback"
+      ]
+    },
+    {
+      "name": "docs-lint-acronyms",
+      "description": "Standards and abbreviations",
+      "words": [
+        "dbml",
+        "eest",
+        "hmac",
+        "iban",
+        "serp",
+        "totp"
+      ]
+    },
+    {
+      "name": "docs-lint-ruby",
+      "description": "Ruby and Rails terms that cspell's ruby dictionary lacks; turn on the two together",
+      "words": [
+        "activerecord",
+        "blueprinter",
+        "fakeredis",
+        "goldiloader",
+        "ivar",
+        "ivars",
+        "kwarg",
+        "pagy",
+        "persistable",
+        "premailer",
+        "rubycritic",
+        "searchkick",
+        "sgid",
+        "sgids",
+        "stackprof"
+      ]
+    },
+    {
+      "name": "docs-lint-frontend",
+      "description": "Frontend libraries that cspell's node, typescript, fullstack and css dictionaries lack; turn on together with them",
+      "words": [
+        "compressorjs",
+        "cssinjs",
+        "datatables",
+        "fflate",
+        "nuqs",
+        "rspack",
+        "trix"
+      ]
+    }
+  ],
+  "dictionaries": [
+    "docs-lint-docs",
+    "docs-lint-git-shell",
+    "docs-lint-data-infra",
+    "docs-lint-browser",
+    "docs-lint-code",
+    "docs-lint-process",
+    "docs-lint-ai",
+    "docs-lint-code-quality",
+    "docs-lint-products",
+    "docs-lint-acronyms"
+  ]
+}
