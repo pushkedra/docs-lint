@@ -13,11 +13,14 @@ import { fail } from "./output.ts";
 import type { RunOptions } from "./runner.ts";
 
 const USAGE = `usage: docs-lint [--fix] [--staged] [file.md...]
+       docs-lint migrate [--write]
 
   (no arguments)  every markdown file in the tree, without what is gitignored
   file.md...      those files
   --staged        the markdown staged in this commit, and tracked links into what it changes, for a pre-commit hook
-  --fix           apply what can be fixed safely: hard wraps and the lint rules that only change layout`;
+  --fix           apply what can be fixed safely: hard wraps and the lint rules that only change layout
+  migrate         print a .markdownlint-cli2.mjs holding what the markdownlint config at the root sets beyond the base
+  --write         with migrate: create that file and remove the old config`;
 
 // Node exits 1 on an uncaught error, which a hook would read as findings.
 process.on("uncaughtException", (error) => fail(error.message));
@@ -54,5 +57,16 @@ function parse(args: string[]): RunOptions {
   return options;
 }
 
-const { run } = await import("./runner.ts");
-await run(parse(process.argv.slice(2)));
+const args = process.argv.slice(2);
+if (args[0] === "migrate") {
+  const [option, ...extra] = args.slice(1);
+  if (option === "--help" || option === "-h") console.log(USAGE);
+  else {
+    if (extra.length || (option && option !== "--write")) fail(`migrate takes only --write\n\n${USAGE}`);
+    const { migrate } = await import("./migrate.ts");
+    migrate({ write: option === "--write" });
+  }
+} else {
+  const { run } = await import("./runner.ts");
+  await run(parse(args));
+}
