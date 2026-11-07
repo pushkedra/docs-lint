@@ -16,6 +16,8 @@ const OWN_CONFIGS = new Set([".markdownlint-cli2.mjs", "cspell.json"]);
 const LINT_CONFIG = /^\.markdownlint(?:-cli2)?\.(?:jsonc?|ya?ml|cjs|mjs)$/;
 const SPELLING_CONFIG = /^\.?cspell(?:\.config)?\.(?:jsonc?|ya?ml|js|cjs|mjs|toml)$/i;
 
+export const isLintConfig = (name: string): boolean => LINT_CONFIG.test(basename(name));
+
 export const isRegularFile = (path: string): boolean => lstatSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
 
 export function isUtf8(file: string): boolean {
@@ -68,6 +70,6 @@ export function rivalConfigs(dir: string, files: string[]): string[] {
   const atRoot = readdirSync(dir).filter(
     (name) => !OWN_CONFIGS.has(name) && (LINT_CONFIG.test(name) || SPELLING_CONFIG.test(name)),
   );
-  const nested = files.filter((name) => name.includes("/") && LINT_CONFIG.test(basename(name)));
+  const nested = files.filter((name) => name.includes("/") && isLintConfig(name));
   return [...atRoot, ...nested];
 }

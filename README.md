@@ -50,6 +50,7 @@ npx docs-lint                # every markdown file in the tree, without what is 
 npx docs-lint --fix          # unwrap paragraphs and apply the lint fixes that only change layout
 npx docs-lint README.md      # those files
 npx docs-lint --staged       # the markdown staged in this commit, and tracked links into what it changes
+npx docs-lint migrate        # print the config that replaces an old markdownlint config; --write applies it
 ```
 
 Run it from the repository root. `"lint": "docs-lint"` under `scripts` in `package.json` makes it `npm run lint`, or `"lint:docs"` where `lint` is taken. A pre-commit hook needs one line, with `--no-install` so that it can never download anything: `npx --no-install docs-lint --staged`. In CI, install first with `npm ci`, then run `npx --no-install docs-lint`.
@@ -101,6 +102,8 @@ export default withBase({
 One link is excused with `<!-- markdownlint-disable-next-line docs-lint-links -->` above it, and `"docs-lint-links": false` turns the rule off.
 
 ## Migrating
+
+`npx docs-lint migrate` does the config's part of step 1 and the exclusions of step 3. It reads the `.markdownlint-cli2.jsonc`, `.yaml`, or `.markdownlint.json`, `.jsonc`, `.yaml`, `.yml` at the root and prints a `.markdownlint-cli2.mjs` holding only what that config sets beyond the base, with a note on each thing worth a second look: a rule it turns off, a base setting it replaces, and `gitignore: false`, which keeps reading gitignored files as `markdownlint-cli2` does by default. `--write` creates the file and removes the old one; its comments do not move, and an existing `.markdownlint-cli2.mjs` is left alone. It refuses a config that is code (`.cjs`, `.mjs`), two configs at the root and a config with `extends`, and it names but does not touch a nested config or a spell-check config.
 
 1. Replace, do not add: remove `.markdownlint-cli2.jsonc`, `.markdownlint.json`, `.cspell.json` and the like, and rewrite an existing `cspell.json` as shown above. A rival config would silently win, so the command refuses to run beside one. A nested copy stops the run too; if it is a template or a fixture, name it in `ignores`. A link to a config you removed is now a finding.
 2. Remove direct pins of `markdownlint-cli2` and `cspell`, and point a hook at `npx --no-install docs-lint --staged`. Remove what the old setup left: scripts that call the removed tools, and instructions telling people or agents to run them.

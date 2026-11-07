@@ -4,6 +4,10 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `docs-lint migrate` prints a `.markdownlint-cli2.mjs` holding what the markdownlint config at the root sets beyond the base, and `--write` creates that file and removes the old config. It reads JSON, JSONC and YAML, and refuses a config that is code.
+
 ### Fixed
 
 - On Windows, a repository with enough markdown files to pass the command-line limit exited 2 with no reason given. The file list no longer goes through a command line, on any platform.
